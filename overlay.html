@@ -50,9 +50,11 @@
     box-shadow: var(--shadow);
     max-width: 100%;
   }
-  .badge .label {
-    background: var(--bg2); color: var(--fg2);
+  /* ラベルは不透明な札の上にあるので、ふち取り（影）をつけずにくっきり見せる */
+  .badge .label, .goal .label {
+    background: var(--bg2); color: var(--fg2); text-shadow: none;
     font-size: 0.7em; padding: 0.2em 0.6em; border-radius: 999px; white-space: nowrap;
+    -webkit-font-smoothing: antialiased;
   }
   .badge .text { overflow-wrap: anywhere; }
   /* 時計・配信時間・体重は、ラベルを数字の上に置いて横一列に並べる */
@@ -61,7 +63,7 @@
     flex: 1 1 0; flex-direction: column; align-items: center; gap: 0.15em;
     border-radius: 0.6em; padding: 0.3em 0.5em 0.35em; min-width: 0;
   }
-  .top .badge .label { font-size: 0.68em; font-weight: 500; padding: 0.1em 0.55em; letter-spacing: 0.02em; }
+  .top .badge .label { font-size: 0.7em; font-weight: 700; padding: 0.12em 0.55em; letter-spacing: 0.04em; }
   .top .badge .text { white-space: nowrap; }
   #timer .text, #clock .text, #weight .text { font-variant-numeric: tabular-nums; letter-spacing: 0.03em; }
 
@@ -74,15 +76,15 @@
   .stack .tickers { position: static; }
   .ticker {
     background: var(--panel); color: var(--fg); text-shadow: var(--text-glow);
-    font-weight: 700; font-size: 0.85em;
-    padding: 0.4em 0; overflow: hidden; white-space: nowrap;
+    font-weight: 700; font-size: 1.1em;
+    padding: 0.35em 0; overflow: hidden; white-space: nowrap;
     box-shadow: var(--shadow);
   }
   .ticker .track { display: inline-block; padding-left: 100%; animation: scroll linear infinite; }
   .ticker .item { margin-right: 3em; }
   .ticker .item::before { content: "★ "; color: var(--bg2); }
   /* 2段目は色を反転して区別する */
-  .ticker.alt { background: var(--panel2); color: var(--fg2); font-size: 0.8em; text-shadow: 0 0 0.2em rgba(255,255,255, calc(0.8 * (1 - var(--alpha)))); }
+  .ticker.alt { background: var(--panel2); color: var(--fg2); text-shadow: 0 0 0.2em rgba(255,255,255, calc(0.8 * (1 - var(--alpha)))); }
   .ticker.alt .item::before { content: "♪ "; color: var(--bg); }
   @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 
@@ -95,7 +97,7 @@
     box-shadow: var(--shadow);
   }
   .goal .row { display: flex; align-items: center; gap: 0.4em; }
-  .goal .label { background: var(--bg2); color: var(--fg2); font-size: 0.7em; font-weight: 500; letter-spacing: 0.02em; padding: 0.15em 0.55em; border-radius: 999px; white-space: nowrap; }
+  .goal .label { font-weight: 700; letter-spacing: 0.04em; padding: 0.15em 0.55em; }
   .goal .left { margin-left: auto; font-size: 0.72em; white-space: nowrap; }
   .goal .count { margin-top: 0.15em; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .goal .count small { font-size: 0.8em; opacity: .85; }
