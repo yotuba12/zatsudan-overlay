@@ -81,6 +81,9 @@
   .yt-chat b { opacity: .7; margin-right: 4px; font-weight: 500; }
   .yt-input { margin-top: 4px; border-radius: 999px; background: rgba(255,255,255,.2); padding: 5px 10px; opacity: .9; }
   .yt-side { position: absolute; right: 8px; bottom: 14%; display: flex; flex-direction: column; gap: 12px; font-size: 18px; }
+  .unit-input { display: flex; align-items: center; gap: 8px; }
+  .unit-input input { max-width: 160px; }
+  .unit-input span { font-weight: 700; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
   .range-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .8rem; }
   fieldset.group { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 14px; margin: 16px 0 0; }
@@ -114,6 +117,9 @@
     <form class="card" id="form" autocomplete="off">
       <label class="check" style="margin-top:0"><input type="checkbox" id="clock" checked> 現在時刻を表示する</label>
       <label class="check"><input type="checkbox" id="sec" checked> 秒も表示する</label>
+
+      <label for="w">本日の体重 <span class="hint">（kg。配信時間の隣に出ます。空欄なら表示しない）</span></label>
+      <div class="unit-input"><input type="number" id="w" step="0.1" min="0" max="999" inputmode="decimal" placeholder="160.0"><span>kg</span></div>
 
       <label for="m">テロップ <span class="hint">（1行に1つ。順番に流れます）</span></label>
       <textarea id="m">178cm 160kg 38歳 無職 栃木県宇都宮市在住 国立宇都宮大学工学部卒業(4留)</textarea>
@@ -209,13 +215,6 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
 
       <div class="row">
         <div>
-          <label for="pos">左右の位置</label>
-          <select id="pos">
-            <option value="left" selected>左寄せ</option>
-            <option value="right">右寄せ</option>
-          </select>
-        </div>
-        <div>
           <label>色</label>
           <div class="swatches" id="theme">
             <input type="radio" name="theme" id="th-pink" value="pink" checked><label for="th-pink" style="background:#ff6fa5" title="ピンク"></label>
@@ -287,7 +286,7 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
 
 <script>
   const $ = id => document.getElementById(id);
-  const fields = ['clock', 'sec', 'm', 'm2','speed', 'size', 'goalOn', 'goal', 'step', 'sgoalOn', 'sgoal', 'sstep', 'ch', 'key', 'timer', 'start', 'y', 'tick', 'pos', 'tr', 'cycOn', 'show', 'hide'];
+  const fields = ['clock', 'sec', 'w', 'm','m2','speed', 'size', 'goalOn', 'goal', 'step', 'sgoalOn', 'sgoal', 'sstep', 'ch', 'key', 'timer', 'start', 'y', 'tick', 'tr', 'cycOn', 'show', 'hide'];
   const base = new URL('overlay.html', location.href).href;
 
   // 前回の入力を覚えておく（このブラウザの中だけ）
@@ -309,6 +308,8 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
     const p = new URLSearchParams();
     if (!$('clock').checked) p.set('clock', '0');
     else if (!$('sec').checked) p.set('sec', '0');
+    const w = parseFloat($('w').value);
+    if (w > 0 && w < 1000) p.set('w', (Math.round(w * 10) / 10).toFixed(1)); // 小数第1位までそろえる
     const lines = id => $(id).value.split('\n').map(x => x.trim().replace(/\|/g, '｜')).filter(Boolean).join('|');
     const m = lines('m'); if (m) p.set('m', m);
     const m2 = lines('m2'); if (m2) p.set('m2', m2);
@@ -318,7 +319,6 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
     else if ($('start').value) p.set('start', $('start').value);
     if ($('y').value !== '14') p.set('y', $('y').value);
     if ($('tick').value === 'bottom') p.set('tick', 'bottom');
-    if ($('pos').value !== 'left') p.set('pos', $('pos').value);
     $('tr-val').textContent = $('tr').value;
     if ($('tr').value !== '0') p.set('tr', $('tr').value);
     const show = parseInt($('show').value, 10), hide = parseInt($('hide').value, 10);
