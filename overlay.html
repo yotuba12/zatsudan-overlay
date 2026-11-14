@@ -147,15 +147,11 @@
   const tr = parseInt(p.get('tr'), 10);
   if (tr >= 0 && tr <= 100) body.style.setProperty('--alpha', (100 - tr) / 100);
 
-  // 縦長の画面（縦配信）かどうか。YouTube の縦配信では
-  // 上にチャンネル名・視聴者数、下にコメント欄やボタンが重なるので、
-  // 自動のときは表示を少し下げて、テロップも上側に置く。
-  const portrait = innerHeight > innerWidth;
+  // 縦配信専用。YouTube の縦配信では上にチャンネル名・視聴者数、
+  // 下にコメント欄やボタンが重なるので、表示を少し下げて、テロップも上側（時計の下）に置く。
   const y = p.get('y');
-  if (y && /^\d{1,2}$/.test(y)) body.style.setProperty('--y', y + '%');
-  else if (portrait) body.style.setProperty('--y', '14%');
-  const tickPos = p.get('tick') || 'auto';
-  const tickerOnTop = tickPos === 'top' || (tickPos === 'auto' && portrait);
+  body.style.setProperty('--y', (y && /^\d{1,2}$/.test(y) ? y : 14) + '%');
+  const tickerOnTop = p.get('tick') !== 'bottom';
 
   const pad = n => String(n).padStart(2, '0');
 

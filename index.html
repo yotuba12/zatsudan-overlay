@@ -52,7 +52,6 @@
     position: relative; margin: 0 auto; border-radius: 12px; overflow: hidden;
     background: linear-gradient(135deg, #8aa4c8, #c9a7c7 50%, #f3c9a8);
   }
-  .stage.landscape { width: 100%; aspect-ratio: 16 / 9; }
   .stage.portrait { width: min(100%, 300px); aspect-ratio: 9 / 16; }
   .stage::after {
     content: "（ここにカメラの映像）"; position: absolute; inset: 0; display: grid; place-items: center;
@@ -61,7 +60,7 @@
   .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; z-index: 1; }
   /* YouTube 縦配信の画面（目安） */
   .yt { position: absolute; inset: 0; z-index: 2; pointer-events: none; color: #fff; font-size: 11px; font-family: "Roboto", "Meiryo", sans-serif; }
-  .yt[hidden], .stage.landscape .yt { display: none; }
+  .yt[hidden] { display: none; }
   .yt-top {
     position: absolute; top: 0; left: 0; right: 0; height: 12%;
     display: flex; align-items: center; gap: 6px; padding: 0 8px;
@@ -82,7 +81,6 @@
   .yt-chat b { opacity: .7; margin-right: 4px; font-weight: 500; }
   .yt-input { margin-top: 4px; border-radius: 999px; background: rgba(255,255,255,.2); padding: 5px 10px; opacity: .9; }
   .yt-side { position: absolute; right: 8px; bottom: 14%; display: flex; flex-direction: column; gap: 12px; font-size: 18px; }
-  .stage.landscape ~ #yt-toggle-wrap { display: none; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
   .range-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .8rem; }
   fieldset.group { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 14px; margin: 16px 0 0; }
@@ -117,7 +115,7 @@
       <label class="check" style="margin-top:0"><input type="checkbox" id="clock" checked> 現在時刻を表示する</label>
       <label class="check"><input type="checkbox" id="sec" checked> 秒も表示する</label>
 
-      <label for="m">テロップ <span class="hint">（1行に1つ。順番に画面下を流れます）</span></label>
+      <label for="m">テロップ <span class="hint">（1行に1つ。順番に流れます）</span></label>
       <textarea id="m">来てくれてありがとう！
 初見さん大歓迎、気軽にコメントしてね
 チャンネル登録・高評価もよろしくお願いします</textarea>
@@ -196,19 +194,17 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
         <div>
           <label for="y">表示の高さ</label>
           <select id="y">
-            <option value="" selected>自動（縦配信は少し下げる）</option>
             <option value="3">いちばん上</option>
             <option value="10">少し下</option>
-            <option value="14">もう少し下</option>
+            <option value="14" selected>もう少し下（おすすめ）</option>
             <option value="20">かなり下</option>
           </select>
         </div>
         <div>
           <label for="tick">テロップの位置</label>
           <select id="tick">
-            <option value="auto" selected>自動（縦配信は時計の下）</option>
-            <option value="top">時計の下</option>
-            <option value="bottom">画面のいちばん下</option>
+            <option value="top" selected>時計の下（おすすめ）</option>
+            <option value="bottom">画面のいちばん下（コメント欄と重なります）</option>
           </select>
         </div>
       </div>
@@ -252,11 +248,7 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
 
     <section class="card">
       <div class="preview-head">
-        <h2>プレビュー</h2>
-        <div class="seg" id="orient">
-          <button type="button" data-o="portrait" class="on">縦配信</button>
-          <button type="button" data-o="landscape">横配信</button>
-        </div>
+        <h2>プレビュー（縦配信）</h2>
       </div>
       <div class="stage portrait" id="stage">
         <iframe id="frame" title="プレビュー"></iframe>
@@ -308,6 +300,9 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
         if (!(k in saved)) return;
         if ($(k).type === 'checkbox') $(k).checked = saved[k]; else $(k).value = saved[k];
       });
+      // 前のバージョンで保存した「自動」は、今のおすすめ設定に置きかえる
+      if ($('y').selectedIndex < 0) $('y').value = '14';
+      if ($('tick').selectedIndex < 0) $('tick').value = 'top';
       if (saved.theme) { const r = document.querySelector(`input[name=theme][value="${saved.theme}"]`); if (r) r.checked = true; }
     }
   } catch (e) {}
@@ -323,8 +318,8 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
     if ($('size').value !== 'm') p.set('size', $('size').value);
     if (!$('timer').checked) p.set('timer', '0');
     else if ($('start').value) p.set('start', $('start').value);
-    if ($('y').value) p.set('y', $('y').value);
-    if ($('tick').value !== 'auto') p.set('tick', $('tick').value);
+    if ($('y').value !== '14') p.set('y', $('y').value);
+    if ($('tick').value === 'bottom') p.set('tick', 'bottom');
     if ($('pos').value !== 'left') p.set('pos', $('pos').value);
     $('tr-val').textContent = $('tr').value;
     if ($('tr').value !== '0') p.set('tr', $('tr').value);
@@ -387,12 +382,6 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
   syncDisabled();
   $('form').addEventListener('change', syncDisabled);
 
-  document.querySelectorAll('#orient button').forEach(b => b.addEventListener('click', () => {
-    document.querySelectorAll('#orient button').forEach(x => x.classList.toggle('on', x === b));
-    $('stage').className = 'stage ' + b.dataset.o;
-    $('frame').src = 'about:blank';
-    requestAnimationFrame(() => { $('frame').src = previewUrl($('url').value); }); // 縦横で自動配置が変わるので読み込み直す
-  }));
 
   $('yt-toggle').addEventListener('change', () => { $('yt').hidden = !$('yt-toggle').checked; });
 
