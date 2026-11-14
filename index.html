@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>雑談オーバーレイ設定</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fff7fa; --card: #ffffff; --text: #2b2b33; --muted: #777784;
+    --line: #eadde3; --accent: #ff4f8b; --accent-text: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17171d; --card: #22222b; --text: #ececf1; --muted: #a0a0ad; --line: #34343f; --accent: #ff6fa5; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "M PLUS Rounded 1c", "Meiryo", sans-serif; line-height: 1.6;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 20px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  label { display: block; font-weight: 700; margin: 14px 0 6px; }
+  label:first-child { margin-top: 0; }
+  .hint { color: var(--muted); font-size: .85rem; font-weight: 500; }
+  input[type=text], input[type=time], textarea, select {
+    width: 100%; padding: 10px 12px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 120px; }
+  .check { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-top: 14px; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatches input { display: none; }
+  .swatches label {
+    margin: 0; width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+    border: 3px solid transparent; box-shadow: 0 0 0 1px var(--line);
+  }
+  .swatches input:checked + label { border-color: var(--text); }
+  .preview-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+  .preview-head h2 { font-size: 1.05rem; margin: 0; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; color: var(--text); font: inherit; padding: 4px 12px; cursor: pointer; }
+  .seg button.on { background: var(--accent); color: var(--accent-text); }
+  .stage {
+    position: relative; margin: 0 auto; border-radius: 12px; overflow: hidden;
+    background: linear-gradient(135deg, #8aa4c8, #c9a7c7 50%, #f3c9a8);
+  }
+  .stage.landscape { width: 100%; aspect-ratio: 16 / 9; }
+  .stage.portrait { width: min(100%, 300px); aspect-ratio: 9 / 16; }
+  .stage::after {
+    content: "（ここにカメラの映像）"; position: absolute; inset: 0; display: grid; place-items: center;
+    color: rgba(255,255,255,.75); font-weight: 700; pointer-events: none;
+  }
+  .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; z-index: 1; }
+  /* YouTube 縦配信の画面（目安） */
+  .yt { position: absolute; inset: 0; z-index: 2; pointer-events: none; color: #fff; font-size: 11px; font-family: "Roboto", "Meiryo", sans-serif; }
+  .yt[hidden], .stage.landscape .yt { display: none; }
+  .yt-top {
+    position: absolute; top: 0; left: 0; right: 0; height: 12%;
+    display: flex; align-items: center; gap: 6px; padding: 0 8px;
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,0));
+    outline: 1px dashed rgba(255,255,255,.55); outline-offset: -1px;
+  }
+  .yt-avatar { width: 24px; height: 24px; border-radius: 50%; background: #ddd; flex: none; }
+  .yt-lines { display: flex; flex-direction: column; line-height: 1.25; flex: 1; min-width: 0; }
+  .yt-lines i { font-style: normal; opacity: .85; font-size: 10px; }
+  .yt-sub { background: #fff; color: #000; border-radius: 999px; padding: 2px 8px; font-weight: 700; }
+  .yt-x { font-size: 14px; }
+  .yt-bottom {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 38%;
+    display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding: 8px 52px 8px 8px;
+    background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.6));
+    outline: 1px dashed rgba(255,255,255,.55); outline-offset: -1px;
+  }
+  .yt-chat b { opacity: .7; margin-right: 4px; font-weight: 500; }
+  .yt-input { margin-top: 4px; border-radius: 999px; background: rgba(255,255,255,.2); padding: 5px 10px; opacity: .9; }
+  .yt-side { position: absolute; right: 8px; bottom: 14%; display: flex; flex-direction: column; gap: 12px; font-size: 18px; }
+  .stage.landscape ~ #yt-toggle-wrap { display: none; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .range-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .8rem; }
+  fieldset.group { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 14px; margin: 16px 0 0; }
+  fieldset.group legend { font-weight: 800; padding: 0 6px; }
+  input[type=number] {
+    width: 100%; padding: 10px 12px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+  }
+  details.howto { margin-top: 10px; font-size: .88rem; }
+  details.howto summary { cursor: pointer; font-weight: 700; color: var(--accent); }
+  details.howto ol { padding-left: 1.3em; margin: 8px 0; }
+  details.howto li { margin-bottom: 4px; }
+  details.howto a { color: var(--accent); }
+  details.howto code { font-size: .85em; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+  .url-box { margin-top: 16px; }
+  .url-row { display: flex; gap: 8px; }
+  .url-row input { flex: 1; font-size: .85rem; }
+  button.primary {
+    border: 0; border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 800;
+    background: var(--accent); color: var(--accent-text); cursor: pointer; white-space: nowrap;
+  }
+  ol.steps { padding-left: 1.3em; margin: 8px 0 0; color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🎙️ 雑談オーバーレイ設定</h1>
+  <p class="lead">内容を入力すると、PRISM の「Web」ウィジェットに貼る URL ができます。</p>
+
+  <div class="grid">
+    <form class="card" id="form" autocomplete="off">
+      <label class="check" style="margin-top:0"><input type="checkbox" id="clock" checked> 現在時刻を表示する</label>
+      <label class="check"><input type="checkbox" id="sec" checked> 秒も表示する</label>
+
+      <label for="m">テロップ <span class="hint">（1行に1つ。順番に画面下を流れます）</span></label>
+      <textarea id="m">来てくれてありがとう！
+初見さん大歓迎、気軽にコメントしてね
+チャンネル登録・高評価もよろしくお願いします</textarea>
+
+      <label for="m2">テロップ 2段目 <span class="hint">（1段目の下に、色を変えて流れます。空欄なら表示しない）</span></label>
+      <textarea id="m2">雑談配信は毎週○曜日 21時〜
+X（旧Twitter）でも配信のお知らせをしています</textarea>
+
+      <div class="row">
+        <div>
+          <label for="speed">流れる速さ</label>
+          <select id="speed">
+            <option value="slow">ゆっくり</option>
+            <option value="normal" selected>ふつう</option>
+            <option value="fast">はやい</option>
+          </select>
+        </div>
+        <div>
+          <label for="size">文字の大きさ</label>
+          <select id="size">
+            <option value="s">小</option>
+            <option value="m" selected>中</option>
+            <option value="l">大</option>
+          </select>
+        </div>
+      </div>
+
+      <fieldset class="group">
+        <legend>🎯 目標バー</legend>
+        <label class="check" style="margin-top:0"><input type="checkbox" id="goalOn" checked> 👍 高評価の目標を表示する</label>
+        <div class="row">
+          <div>
+            <label for="goal">目標の数</label>
+            <input type="number" id="goal" value="100" min="1" inputmode="numeric">
+          </div>
+          <div>
+            <label for="step">達成したら増やす数 <span class="hint">（0で増やさない）</span></label>
+            <input type="number" id="step" value="50" min="0" inputmode="numeric">
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="sgoalOn" checked> 🔔 チャンネル登録者の目標を表示する</label>
+        <div class="row">
+          <div>
+            <label for="sgoal">目標の人数</label>
+            <input type="number" id="sgoal" value="500" min="1" inputmode="numeric">
+          </div>
+          <div>
+            <label for="sstep">達成したら増やす数 <span class="hint">（0で増やさない）</span></label>
+            <input type="number" id="sstep" value="100" min="0" inputmode="numeric">
+          </div>
+        </div>
+        <p class="hint" style="margin:6px 0 0">※ 登録者が1,000人を超えると、YouTube は数を丸めて返します（例 1,234人 → 1,230人）。</p>
+        <label for="ch">YouTube チャンネルのハンドル</label>
+        <input type="text" id="ch" placeholder="@yourchannel">
+        <label for="key">YouTube API キー</label>
+        <input type="text" id="key" placeholder="AIza…" spellcheck="false">
+        <p class="hint" style="margin:6px 0 0">API キーが空のあいだは、プレビューにデモの数字が出ます。キーは URL に入るので、<b>URL を人に見せたり、配信画面に映したりしないでください</b>。</p>
+        <details class="howto">
+          <summary>API キーの作り方</summary>
+          <ol>
+            <li><a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud コンソール</a>に Google アカウントでログインし、新しいプロジェクトを作る</li>
+            <li>「API とサービス」→「ライブラリ」で <b>YouTube Data API v3</b> を探して「有効にする」</li>
+            <li>「API とサービス」→「認証情報」→「認証情報を作成」→「API キー」</li>
+            <li>できたキーの「キーを制限」で、<b>API の制限</b>を「YouTube Data API v3」だけにする。<b>アプリケーションの制限</b>を「ウェブサイト」にして、公開先のアドレス（例 <code>https://yotuba12.github.io/*</code>）を入れる</li>
+            <li>キーをコピーして、上の欄に貼る</li>
+          </ol>
+          <p>無料の範囲で使えます。高評価数は1分ごとに取得します。</p>
+        </details>
+      </fieldset>
+
+      <label class="check"><input type="checkbox" id="timer" checked> 配信時間を表示する</label>
+      <label for="start">配信開始時刻 <span class="hint">（空欄なら、表示した時から数える）</span></label>
+      <input type="time" id="start">
+
+      <div class="row">
+        <div>
+          <label for="y">表示の高さ</label>
+          <select id="y">
+            <option value="" selected>自動（縦配信は少し下げる）</option>
+            <option value="3">いちばん上</option>
+            <option value="10">少し下</option>
+            <option value="14">もう少し下</option>
+            <option value="20">かなり下</option>
+          </select>
+        </div>
+        <div>
+          <label for="tick">テロップの位置</label>
+          <select id="tick">
+            <option value="auto" selected>自動（縦配信は時計の下）</option>
+            <option value="top">時計の下</option>
+            <option value="bottom">画面のいちばん下</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="pos">左右の位置</label>
+          <select id="pos">
+            <option value="left" selected>左寄せ</option>
+            <option value="right">右寄せ</option>
+          </select>
+        </div>
+        <div>
+          <label>色</label>
+          <div class="swatches" id="theme">
+            <input type="radio" name="theme" id="th-pink" value="pink" checked><label for="th-pink" style="background:#ff6fa5" title="ピンク"></label>
+            <input type="radio" name="theme" id="th-blue" value="blue"><label for="th-blue" style="background:#3d8bfd" title="ブルー"></label>
+            <input type="radio" name="theme" id="th-green" value="green"><label for="th-green" style="background:#2fb879" title="グリーン"></label>
+            <input type="radio" name="theme" id="th-dark" value="dark"><label for="th-dark" style="background:#1f2230" title="ダーク"></label>
+            <input type="radio" name="theme" id="th-white" value="white"><label for="th-white" style="background:#ffffff" title="ホワイト"></label>
+          </div>
+        </div>
+      </div>
+
+      <label for="tr">背景の透過率 <span class="hint">（<span id="tr-val">0</span>%　0%で不透明、100%で背景なし）</span></label>
+      <input type="range" id="tr" min="0" max="100" step="5" value="0">
+      <div class="range-ends"><span>不透明</span><span>半透明</span><span>透明</span></div>
+
+      <label class="check"><input type="checkbox" id="cycOn" checked> 一定時間ごとに目標バーとテロップを隠す <span class="hint">（時計・配信時間は出したまま）</span></label>
+      <div class="row">
+        <div>
+          <label for="show">表示する秒数</label>
+          <input type="number" id="show" value="50" min="1" inputmode="numeric">
+        </div>
+        <div>
+          <label for="hide">消えている秒数</label>
+          <input type="number" id="hide" value="10" min="1" inputmode="numeric">
+        </div>
+      </div>
+    </form>
+
+    <section class="card">
+      <div class="preview-head">
+        <h2>プレビュー</h2>
+        <div class="seg" id="orient">
+          <button type="button" data-o="portrait" class="on">縦配信</button>
+          <button type="button" data-o="landscape">横配信</button>
+        </div>
+      </div>
+      <div class="stage portrait" id="stage">
+        <iframe id="frame" title="プレビュー"></iframe>
+        <!-- YouTube 縦配信を見ている人の画面に重なる部分（目安） -->
+        <div class="yt" id="yt" aria-hidden="true">
+          <div class="yt-top">
+            <span class="yt-avatar"></span>
+            <span class="yt-lines"><b>チャンネル名</b><i>👁 123人が視聴中</i></span>
+            <span class="yt-sub">登録</span>
+            <span class="yt-x">✕</span>
+          </div>
+          <div class="yt-bottom">
+            <div class="yt-chat"><b>視聴者A</b> こんばんは！</div>
+            <div class="yt-chat"><b>視聴者B</b> 初見です〜</div>
+            <div class="yt-chat"><b>視聴者C</b> 今日は何の話？</div>
+            <div class="yt-input">チャット…</div>
+          </div>
+          <div class="yt-side"><span>👍</span><span>💬</span><span>↗</span></div>
+        </div>
+      </div>
+      <label class="check" id="yt-toggle-wrap"><input type="checkbox" id="yt-toggle" checked> YouTube の画面を重ねて確認する <span class="hint">（位置は目安）</span></label>
+
+      <div class="url-box">
+        <label for="url">PRISM に貼る URL</label>
+        <div class="url-row">
+          <input type="text" id="url" readonly>
+          <button type="button" class="primary" id="copy">コピー</button>
+        </div>
+        <ol class="steps">
+          <li>PRISM の My Studio → ウィジェット → 「Web」を開く</li>
+          <li>URL 欄に貼り付けて保存</li>
+          <li>ウィジェットを画面いっぱいに広げる</li>
+        </ol>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const fields = ['clock', 'sec', 'm', 'm2','speed', 'size', 'goalOn', 'goal', 'step', 'sgoalOn', 'sgoal', 'sstep', 'ch', 'key', 'timer', 'start', 'y', 'tick', 'pos', 'tr', 'cycOn', 'show', 'hide'];
+  const base = new URL('overlay.html', location.href).href;
+
+  // 前回の入力を覚えておく（このブラウザの中だけ）
+  try {
+    const saved = JSON.parse(localStorage.getItem('zatsudan-overlay') || 'null');
+    if (saved) {
+      fields.forEach(k => {
+        if (!(k in saved)) return;
+        if ($(k).type === 'checkbox') $(k).checked = saved[k]; else $(k).value = saved[k];
+      });
+      if (saved.theme) { const r = document.querySelector(`input[name=theme][value="${saved.theme}"]`); if (r) r.checked = true; }
+    }
+  } catch (e) {}
+
+  function buildUrl() {
+    const p = new URLSearchParams();
+    if (!$('clock').checked) p.set('clock', '0');
+    else if (!$('sec').checked) p.set('sec', '0');
+    const lines = id => $(id).value.split('\n').map(x => x.trim().replace(/\|/g, '｜')).filter(Boolean).join('|');
+    const m = lines('m'); if (m) p.set('m', m);
+    const m2 = lines('m2'); if (m2) p.set('m2', m2);
+    if ($('speed').value !== 'normal') p.set('speed', $('speed').value);
+    if ($('size').value !== 'm') p.set('size', $('size').value);
+    if (!$('timer').checked) p.set('timer', '0');
+    else if ($('start').value) p.set('start', $('start').value);
+    if ($('y').value) p.set('y', $('y').value);
+    if ($('tick').value !== 'auto') p.set('tick', $('tick').value);
+    if ($('pos').value !== 'left') p.set('pos', $('pos').value);
+    $('tr-val').textContent = $('tr').value;
+    if ($('tr').value !== '0') p.set('tr', $('tr').value);
+    const show = parseInt($('show').value, 10), hide = parseInt($('hide').value, 10);
+    if ($('cycOn').checked && show > 0 && hide > 0) { p.set('show', show); p.set('hide', hide); }
+    const theme = document.querySelector('input[name=theme]:checked').value;
+    if (theme !== 'pink') p.set('theme', theme);
+    const likeOn = $('goalOn').checked && parseInt($('goal').value, 10) > 0;
+    const subOn = $('sgoalOn').checked && parseInt($('sgoal').value, 10) > 0;
+    if (likeOn) {
+      p.set('goal', parseInt($('goal').value, 10));
+      const step = parseInt($('step').value, 10) || 0;
+      if (step > 0) p.set('step', step);
+    }
+    if (subOn) {
+      p.set('sgoal', parseInt($('sgoal').value, 10));
+      const sstep = parseInt($('sstep').value, 10) || 0;
+      if (sstep > 0) p.set('sstep', sstep);
+    }
+    if (likeOn || subOn) {
+      if ($('ch').value.trim()) p.set('ch', $('ch').value.trim());
+      if ($('key').value.trim()) p.set('key', $('key').value.trim());
+    }
+    const qs = p.toString();
+    return base + (qs ? '?' + qs : '');
+  }
+
+  // プレビュー用：エラー表示を出し、キーが空ならデモの数字を使う
+  function previewUrl(url) {
+    const u = new URL(url);
+    u.searchParams.set('preview', '1');
+    if ((u.searchParams.has('goal') || u.searchParams.has('sgoal')) && !u.searchParams.has('key')) u.searchParams.set('demo', '1');
+    return u.href;
+  }
+
+  let timer;
+  function update() {
+    const url = buildUrl();
+    $('url').value = url;
+    clearTimeout(timer);
+    timer = setTimeout(() => { $('frame').src = previewUrl(url); }, 400);
+    try {
+      const data = {};
+      fields.forEach(k => data[k] = $(k).type === 'checkbox' ? $(k).checked : $(k).value);
+      data.theme = document.querySelector('input[name=theme]:checked').value;
+      localStorage.setItem('zatsudan-overlay', JSON.stringify(data));
+    } catch (e) {}
+  }
+
+  $('form').addEventListener('input', update);
+  $('form').addEventListener('change', update);
+  const syncDisabled = () => {
+    $('start').disabled = !$('timer').checked;
+    $('sec').disabled = !$('clock').checked;
+    ['goal', 'step'].forEach(k => $(k).disabled = !$('goalOn').checked);
+    ['sgoal', 'sstep'].forEach(k => $(k).disabled = !$('sgoalOn').checked);
+    ['show', 'hide'].forEach(k => $(k).disabled = !$('cycOn').checked);
+    ['ch', 'key'].forEach(k => $(k).disabled = !$('goalOn').checked && !$('sgoalOn').checked);
+  };
+  syncDisabled();
+  $('form').addEventListener('change', syncDisabled);
+
+  document.querySelectorAll('#orient button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('#orient button').forEach(x => x.classList.toggle('on', x === b));
+    $('stage').className = 'stage ' + b.dataset.o;
+    $('frame').src = 'about:blank';
+    requestAnimationFrame(() => { $('frame').src = previewUrl($('url').value); }); // 縦横で自動配置が変わるので読み込み直す
+  }));
+
+  $('yt-toggle').addEventListener('change', () => { $('yt').hidden = !$('yt-toggle').checked; });
+
+  $('copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('url').value); }
+    catch (e) { $('url').select(); document.execCommand('copy'); }
+    $('copy').textContent = 'コピーしました！';
+    setTimeout(() => $('copy').textContent = 'コピー', 1500);
+  });
+
+  update();
+</script>
+</body>
+</html>

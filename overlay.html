@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>雑談オーバーレイ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  /* 背景は透明（配信画面に重ねるため） */
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body {
+    font-family: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Meiryo", sans-serif;
+    --scale: 1;
+    font-size: calc(min(4.2vw, 4.2vh) * var(--scale));
+  }
+
+  /* 配色テーマ */
+  /* --bg-rgb / --bg2-rgb は背景を透かすための RGB 値、--glow は文字のふち取りの色 */
+  body[data-theme="pink"]  { --bg: #ff6fa5; --bg-rgb: 255,111,165; --bg2: #ffe3ee; --bg2-rgb: 255,227,238; --fg: #fff; --fg2: #c2185b; --glow: 0,0,0; }
+  body[data-theme="blue"]  { --bg: #3d8bfd; --bg-rgb: 61,139,253;   --bg2: #e0edff; --bg2-rgb: 224,237,255; --fg: #fff; --fg2: #1452b8; --glow: 0,0,0; }
+  body[data-theme="green"] { --bg: #2fb879; --bg-rgb: 47,184,121;   --bg2: #ddf6ea; --bg2-rgb: 221,246,234; --fg: #fff; --fg2: #17734a; --glow: 0,0,0; }
+  body[data-theme="dark"]  { --bg: #1f2230; --bg-rgb: 31,34,48;     --bg2: #3a3f55; --bg2-rgb: 58,63,85;    --fg: #fff; --fg2: #ffd54f; --glow: 0,0,0; }
+  body[data-theme="white"] { --bg: #ffffff; --bg-rgb: 255,255,255;  --bg2: #f1f1f4; --bg2-rgb: 241,241,244; --fg: #333; --fg2: #ff4f8b; --glow: 255,255,255; }
+
+  /* 背景の濃さ（1=不透明, 0=完全に透明）。薄くするほど文字にふち取りをつけて読みやすくする */
+  body {
+    --alpha: 1;
+    --panel: rgba(var(--bg-rgb), var(--alpha));
+    --panel2: rgba(var(--bg2-rgb), var(--alpha));
+    --shadow: 0 0.15em 0.5em rgba(0,0,0, calc(0.25 * var(--alpha)));
+    --text-glow: 0 0 0.2em rgba(var(--glow), calc(0.75 * (1 - var(--alpha)))), 0 0 0.05em rgba(var(--glow), calc(0.9 * (1 - var(--alpha))));
+  }
+
+  /* 上の表示エリア（--y で上からの位置を変えられる） */
+  .stack {
+    position: absolute; top: var(--y, 3vmin); left: 0; right: 0;
+    display: flex; flex-direction: column; gap: 0.5em;
+  }
+  .top {
+    padding: 0 3vmin;
+    display: flex; gap: 0.5em; align-items: flex-start; flex-wrap: wrap;
+  }
+  body[data-pos="right"] .top { justify-content: flex-end; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.45em;
+    background: var(--panel); color: var(--fg); text-shadow: var(--text-glow);
+    padding: 0.35em 0.8em; border-radius: 999px;
+    font-weight: 800; line-height: 1.2;
+    box-shadow: var(--shadow);
+    max-width: 100%;
+  }
+  .badge .label {
+    background: var(--bg2); color: var(--fg2);
+    font-size: 0.7em; padding: 0.2em 0.6em; border-radius: 999px; white-space: nowrap;
+  }
+  .badge .text { overflow-wrap: anywhere; }
+  #timer .text, #clock .text { font-variant-numeric: tabular-nums; letter-spacing: 0.03em; }
+
+  /* テロップ */
+  .tickers {
+    position: absolute; left: 0; right: 0; bottom: 3vmin;
+    display: flex; flex-direction: column; gap: 0.25em;
+  }
+  /* テロップを上（時計の下）に置くとき */
+  .stack .tickers { position: static; }
+  .ticker {
+    background: var(--panel); color: var(--fg); text-shadow: var(--text-glow);
+    font-weight: 700; font-size: 0.85em;
+    padding: 0.4em 0; overflow: hidden; white-space: nowrap;
+    box-shadow: var(--shadow);
+  }
+  .ticker .track { display: inline-block; padding-left: 100%; animation: scroll linear infinite; }
+  .ticker .item { margin-right: 3em; }
+  .ticker .item::before { content: "★ "; color: var(--bg2); }
+  /* 2段目は色を反転して区別する */
+  .ticker.alt { background: var(--panel2); color: var(--fg2); font-size: 0.75em; text-shadow: 0 0 0.2em rgba(255,255,255, calc(0.8 * (1 - var(--alpha)))); }
+  .ticker.alt .item::before { content: "♪ "; color: var(--bg); }
+  @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+
+  /* 目標バー（高評価・登録者を横に並べる） */
+  .goals { padding: 0 3vmin; display: flex; gap: 0.5em; align-items: stretch; }
+  body[data-pos="right"] .goals { justify-content: flex-end; }
+  .goal {
+    flex: 0 1 12em; min-width: 0;
+    background: var(--panel); color: var(--fg); text-shadow: var(--text-glow); border-radius: 0.7em;
+    padding: 0.35em 0.65em 0.5em; font-weight: 800; line-height: 1.25;
+    box-shadow: var(--shadow);
+  }
+  .goal .row { display: flex; align-items: center; gap: 0.4em; }
+  .goal .label { background: var(--bg2); color: var(--fg2); font-size: 0.65em; padding: 0.15em 0.55em; border-radius: 999px; white-space: nowrap; }
+  .goal .left { margin-left: auto; font-size: 0.65em; white-space: nowrap; }
+  .goal .count { margin-top: 0.15em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .goal .count small { font-size: 0.7em; opacity: .85; }
+  .goal .track { margin-top: 0.25em; height: 0.5em; border-radius: 999px; background: var(--bg2); overflow: hidden; }
+  .goal .fill { height: 100%; width: 0; border-radius: 999px; background: var(--fg2); transition: width .8s ease-out; }
+  .goal .note { margin-top: 0.3em; font-size: 0.55em; font-weight: 700; opacity: .9; }
+  .goal.done .fill {
+    background: linear-gradient(90deg, var(--fg2), #ffd54f, var(--fg2)); background-size: 200% 100%;
+    animation: shine 1.2s linear infinite;
+  }
+  .goal.done { animation: pop .6s ease-out; }
+  @keyframes shine { from { background-position: 200% 0; } to { background-position: 0 0; } }
+  @keyframes pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+
+  /* 一定時間ごとに目標バーとテロップをふわっと隠す（時計・配信時間は出したまま） */
+  .goals, .tickers { transition: opacity .8s ease; }
+  body.resting .goals, body.resting .tickers { opacity: 0; }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body data-theme="pink" data-pos="left">
+  <div class="stack" id="stack">
+    <div class="top">
+      <div class="badge" id="clock" hidden><span class="label">現在時刻</span><span class="text">--:--</span></div>
+      <div class="badge" id="timer" hidden><span class="label">配信時間</span><span class="text">0:00:00</span></div>
+    </div>
+    <div class="goals" id="goals"></div>
+  </div>
+  <div class="tickers" id="tickers" hidden>
+    <div class="ticker" id="ticker" hidden><div class="track"></div></div>
+    <div class="ticker alt" id="ticker2" hidden><div class="track"></div></div>
+  </div>
+
+  <template id="goal-tpl">
+    <div class="goal" hidden>
+      <div class="row"><span class="label"></span><span class="left"></span></div>
+      <div class="count"><span class="now">-</span> <small>/ <span class="target">-</span></small></div>
+      <div class="track"><div class="fill"></div></div>
+      <div class="note" hidden></div>
+    </div>
+  </template>
+
+<script>
+  // URL の ? 以降から設定を読む（設定ページで作った URL をそのまま使う）
+  const p = new URLSearchParams(location.search);
+  const body = document.body;
+  const isPreview = p.get('preview') === '1';
+
+  body.dataset.theme = p.get('theme') || 'pink';
+  body.dataset.pos = p.get('pos') === 'right' ? 'right' : 'left';
+  const scale = { s: 0.75, m: 1, l: 1.3 }[p.get('size')] || 1;
+  body.style.setProperty('--scale', scale);
+  // 背景の透過率（tr=0〜100%。0で不透明、100で背景なし）
+  const tr = parseInt(p.get('tr'), 10);
+  if (tr >= 0 && tr <= 100) body.style.setProperty('--alpha', (100 - tr) / 100);
+
+  // 縦長の画面（縦配信）かどうか。YouTube の縦配信では
+  // 上にチャンネル名・視聴者数、下にコメント欄やボタンが重なるので、
+  // 自動のときは表示を少し下げて、テロップも上側に置く。
+  const portrait = innerHeight > innerWidth;
+  const y = p.get('y');
+  if (y && /^\d{1,2}$/.test(y)) body.style.setProperty('--y', y + '%');
+  else if (portrait) body.style.setProperty('--y', '14%');
+  const tickPos = p.get('tick') || 'auto';
+  const tickerOnTop = tickPos === 'top' || (tickPos === 'auto' && portrait);
+
+  const pad = n => String(n).padStart(2, '0');
+
+  // 表示と非表示のくり返し（show=表示する秒数, hide=消えている秒数。どちらかが0なら常に表示）
+  const cycleShow = parseInt(p.get('show'), 10) || 0;
+  const cycleHide = parseInt(p.get('hide'), 10) || 0;
+  if (cycleShow > 0 && cycleHide > 0) {
+    const cycle = () => {
+      body.classList.remove('resting');
+      setTimeout(() => {
+        body.classList.add('resting');
+        setTimeout(cycle, cycleHide * 1000);
+      }, cycleShow * 1000);
+    };
+    cycle();
+  }
+
+  // 現在時刻（配信しているスマホの時計を使う）
+  if (p.get('clock') !== '0') {
+    const el = document.getElementById('clock');
+    const out = el.querySelector('.text');
+    const showSec = p.get('sec') !== '0';
+    const tick = () => {
+      const d = new Date();
+      const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`; // 24時間表示（例 21:05）
+      out.textContent = showSec ? `${hm}:${pad(d.getSeconds())}` : hm;
+    };
+    tick(); setInterval(tick, 1000);
+    el.hidden = false;
+  }
+
+  // 配信時間（start=HH:MM があればその時刻から、なければページを開いた時から数える）
+  if (p.get('timer') !== '0') {
+    const el = document.getElementById('timer');
+    const out = el.querySelector('.text');
+    let start = Date.now();
+    const s = p.get('start');
+    if (s && /^\d{1,2}:\d{2}$/.test(s)) {
+      const [h, m] = s.split(':').map(Number);
+      const d = new Date(); d.setHours(h, m, 0, 0);
+      if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); // 日付をまたいだ配信
+      start = d.getTime();
+    }
+    const tick = () => {
+      const sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
+      out.textContent = `${Math.floor(sec / 3600)}:${pad(Math.floor(sec / 60) % 60)}:${pad(sec % 60)}`;
+    };
+    tick(); setInterval(tick, 1000);
+    el.hidden = false;
+  }
+
+  // テロップ（| で区切ると複数のお知らせを順番に流す）。m=1段目, m2=2段目
+  const speed = { slow: 60, normal: 100, fast: 150 }[p.get('speed')] || 100; // px/秒
+  function setupTicker(id, param) {
+    const msgs = (p.get(param) || '').split('|').map(x => x.trim()).filter(Boolean);
+    if (!msgs.length) return false;
+    const el = document.getElementById(id);
+    const track = el.querySelector('.track');
+    msgs.forEach(text => {
+      const span = document.createElement('span');
+      span.className = 'item';
+      span.textContent = text;
+      track.appendChild(span);
+    });
+    el.hidden = false;
+    // 文字数に合わせて流れる速さを一定にする
+    requestAnimationFrame(() => {
+      track.style.animationDuration = (track.scrollWidth / speed) + 's';
+    });
+    return true;
+  }
+  const t1 = setupTicker('ticker', 'm');
+  const t2 = setupTicker('ticker2', 'm2');
+  if (t1 || t2) {
+    const box = document.getElementById('tickers');
+    if (tickerOnTop) document.getElementById('stack').appendChild(box);
+    box.hidden = false;
+  }
+
+  // ===== 目標バー =====
+  // 高評価:  goal=目標数, step=達成したら増やす数
+  // 登録者:  sgoal=目標数, sstep=達成したら増やす数
+  // 共通:    key=YouTube API キー, ch=チャンネルのハンドル(@xxx) か ID(UC...)
+  //          v=動画ID（指定すると配信の自動検索をしない）, every=取得間隔(秒), demo=1 で動作確認用の数字
+
+  // 目標バーを1本作る
+  function makeGoal(label, goalStart, step) {
+    const el = document.getElementById('goal-tpl').content.firstElementChild.cloneNode(true);
+    document.getElementById('goals').appendChild(el);
+    el.querySelector('.label').textContent = label;
+    const q = s => el.querySelector(s);
+    let target = goalStart, current = null, celebrating = false;
+
+    const render = () => {
+      if (current === null) return;
+      el.hidden = false;
+      q('.now').textContent = current.toLocaleString();
+      q('.target').textContent = target.toLocaleString();
+      const done = current >= target;
+      q('.fill').style.width = Math.min(100, current / target * 100) + '%';
+      q('.left').textContent = done ? '達成！🎉' : `あと ${(target - current).toLocaleString()}`;
+      if (done && !celebrating) {
+        celebrating = true;
+        el.classList.add('done');
+        if (step > 0) {
+          // 15秒お祝いしてから次の目標へ
+          setTimeout(() => {
+            while (target <= current) target += step;
+            el.classList.remove('done');
+            celebrating = false;
+            render();
+          }, 15000);
+        }
+      }
+    };
+    return {
+      set(n) { current = n; render(); },
+      // エラーなどのお知らせは、設定ページのプレビューでだけ見せる（視聴者には見せない）
+      note(msg) {
+        const n = q('.note');
+        n.textContent = msg || '';
+        n.hidden = !(msg && isPreview);
+        if (msg) { console.warn('[' + label + ']', msg); if (current === null) { current = 0; render(); } }
+      },
+    };
+  }
+
+  const num = k => Math.max(0, parseInt(p.get(k), 10) || 0);
+  const likeGoal = num('goal') > 0 ? makeGoal('👍 高評価目標', num('goal'), num('step')) : null;
+  const subGoal = num('sgoal') > 0 ? makeGoal('🔔 登録者目標', num('sgoal'), num('sstep')) : null;
+
+  if (likeGoal || subGoal) startGoals();
+
+  function startGoals() {
+    // デモ（API キーなしで見た目を確認する）
+    if (p.get('demo') === '1') {
+      if (likeGoal) { let n = Math.max(0, num('goal') - 6); likeGoal.set(n); setInterval(() => likeGoal.set(++n), 1200); }
+      if (subGoal) { let n = Math.max(0, num('sgoal') - 3); subGoal.set(n); setInterval(() => subGoal.set(++n), 3000); }
+      return;
+    }
+
+    const all = [likeGoal, subGoal].filter(Boolean);
+    const noteAll = msg => all.forEach(g => g.note(msg));
+    const key = (p.get('key') || '').trim();
+    if (!key) { noteAll('API キーが未設定です'); return; }
+
+    const api = async (path, params) => {
+      const url = 'https://www.googleapis.com/youtube/v3/' + path + '?' + new URLSearchParams({ ...params, key });
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) throw new Error((data.error && data.error.message) || ('HTTP ' + res.status));
+      return data;
+    };
+    const everyMs = Math.max(30, parseInt(p.get('every'), 10) || 60) * 1000;
+    let channelId = null;
+    let videoId = (p.get('v') || '').trim();
+
+    async function getChannelId() {
+      if (channelId) return channelId;
+      const ch = (p.get('ch') || '').trim();
+      if (!ch) throw new Error('チャンネル（@ハンドル）が未設定です');
+      if (/^UC[\w-]{22}$/.test(ch)) return (channelId = ch);
+      const data = await api('channels', { part: 'id', forHandle: ch.startsWith('@') ? ch : '@' + ch });
+      if (!data.items || !data.items.length) throw new Error('チャンネルが見つかりません: ' + ch);
+      return (channelId = data.items[0].id);
+    }
+
+    // --- 登録者数（チャンネルの情報から。1回の取得で使う API 量は少ない） ---
+    async function pollSubs() {
+      try {
+        const data = await api('channels', { part: 'statistics', id: await getChannelId() });
+        const st = data.items && data.items[0] && data.items[0].statistics;
+        if (!st) throw new Error('チャンネルの情報が取れません');
+        if (st.hiddenSubscriberCount) throw new Error('登録者数が非公開になっています');
+        subGoal.note('');
+        subGoal.set(parseInt(st.subscriberCount, 10));
+      } catch (e) {
+        subGoal.note('エラー: ' + e.message);
+      }
+      setTimeout(pollSubs, everyMs);
+    }
+
+    // --- 高評価数（今ライブ中の配信を探してから、その動画の数を取る） ---
+    // 配信の検索は API 量が多いので、見つかるまで3分おきに
+    async function findLive() {
+      try {
+        const data = await api('search', { part: 'id', channelId: await getChannelId(), eventType: 'live', type: 'video', maxResults: 1 });
+        if (data.items && data.items.length) {
+          videoId = data.items[0].id.videoId;
+          likeGoal.note('');
+          pollLikes();
+          return;
+        }
+        likeGoal.note('ライブ配信が見つかりません。3分後にもう一度探します');
+      } catch (e) {
+        likeGoal.note('エラー: ' + e.message);
+      }
+      setTimeout(findLive, 180000);
+    }
+    async function pollLikes() {
+      try {
+        const data = await api('videos', { part: 'statistics', id: videoId });
+        const item = data.items && data.items[0];
+        if (!item) throw new Error('動画が見つかりません: ' + videoId);
+        if (item.statistics.likeCount === undefined) throw new Error('高評価数が非公開になっています');
+        likeGoal.note('');
+        likeGoal.set(parseInt(item.statistics.likeCount, 10));
+      } catch (e) {
+        likeGoal.note('エラー: ' + e.message);
+      }
+      setTimeout(pollLikes, everyMs);
+    }
+
+    if (subGoal) pollSubs();
+    if (likeGoal) { if (videoId) pollLikes(); else findLive(); }
+  }
+</script>
+</body>
+</html>
