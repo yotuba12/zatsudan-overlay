@@ -139,6 +139,27 @@
   .sc.bump { animation: bump .7s ease-out; }
   @keyframes bump { 0% { transform: scale(1); } 30% { transform: scale(1.06); } 100% { transform: scale(1); } }
 
+  /* ===== 縦の長さを詰める調整 ===== */
+  /* 目標バーは2行：1行目にラベルと数、2行目にゲージと「あと○」 */
+  .goal .row { gap: 0.3em; }
+  .goal .count { margin: 0 0 0 auto; font-size: 0.95em; }
+  .goal .count small { font-size: 0.68em; }
+  .goal .row .label { flex: 0 1 auto; }
+  .goal .count { flex: 0 0 auto; }
+  .goal .row2 { display: flex; align-items: center; gap: 0.35em; margin-top: 0.2em; }
+  .goal .row2 .track { flex: 1 1 auto; margin-top: 0; min-width: 2em; }
+  .goal .row2 .left { margin-left: 0; font-size: 0.66em; }
+  .goal { padding: 0.25em 0.55em 0.3em; }
+  /* 時計・配信時間・体重：ラベルと数字の間を詰める */
+  .top .badge { gap: 0.05em; padding: 0.2em 0.4em 0.22em; }
+  .top .badge .label { padding: 0.05em 0.55em; }
+  /* スパチャ欄・テロップ・全体のすき間 */
+  .sc { padding: 0.25em 0.55em 0.3em; }
+  .sc .line + .line { margin-top: 0.15em; }
+  .ticker { padding: 0.2em 0; }
+  .stack { gap: 0.3em; }
+  .tickers { gap: 0.15em; }
+
   /* 一定時間ごとに目標バー・スパチャ・テロップをふわっと隠す（時計・配信時間・体重は出したまま） */
   .goals, .scwrap, .tickers { transition: opacity .8s ease; }
   body.resting .goals, body.resting .scwrap, body.resting .tickers { opacity: 0; }
@@ -177,9 +198,8 @@
 
   <template id="goal-tpl">
     <div class="goal" hidden>
-      <div class="row"><span class="label"></span><span class="left"></span></div>
-      <div class="count"><span class="now">-</span> <small>/ <span class="target">-</span></small></div>
-      <div class="track"><div class="fill"></div></div>
+      <div class="row"><span class="label"></span><span class="count"><span class="now">-</span> <small>/ <span class="target">-</span></small></span></div>
+      <div class="row2"><div class="track"><div class="fill"></div></div><span class="left"></span></div>
       <div class="note" hidden></div>
     </div>
   </template>
@@ -335,6 +355,12 @@
       const done = current >= target;
       q('.fill').style.width = Math.min(100, current / target * 100) + '%';
       q('.left').textContent = done ? '達成！🎉' : `あと ${(target - current).toLocaleString()}`;
+      // 数が大きくて1行目に入りきらないときは「/ 目標」を省く（2行目の「あと○」で分かるので）
+      // それでも入りきらない（文字「大」で数が5けた以上など）ときだけ、ラベルの後ろを「…」で省く
+      const small = q('.count small'), row = q('.row');
+      const need = () => q('.row .label').scrollWidth + q('.count').scrollWidth + 6;
+      small.hidden = false;
+      if (need() > row.clientWidth) small.hidden = true;
       if (done && !celebrating) {
         celebrating = true;
         el.classList.add('done');
