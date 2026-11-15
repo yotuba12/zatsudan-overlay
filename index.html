@@ -136,8 +136,8 @@
           <label for="size">文字の大きさ</label>
           <select id="size">
             <option value="s">小</option>
-            <option value="m" selected>中</option>
-            <option value="l">大</option>
+            <option value="m" selected>中（おすすめ）</option>
+            <option value="l">大（全部出すとコメント欄に少しかかります）</option>
           </select>
         </div>
       </div>
@@ -167,11 +167,11 @@
           </div>
         </div>
         <p class="hint" style="margin:6px 0 0">※ 登録者が1,000人を超えると、YouTube は数を丸めて返します（例 1,234人 → 1,230人）。</p>
-        <label class="check"><input type="checkbox" id="scOn" checked> 💰 スパチャ・🎁 ギフトを数える</label>
-        <label class="check"><input type="checkbox" id="thx" checked> くれた人の名前をお礼のテロップで流す <span class="hint">（テロップのすぐ下に金色の帯で出ます）</span></label>
+        <label class="check"><input type="checkbox" id="scOn" checked> 💰 スパチャ・🎁 ギフト・👑 メンバーシップギフトを数える</label>
+        <label class="check"><input type="checkbox" id="thx" checked> くれた人・メンバーになった人の名前をお礼のテロップで流す<span class="hint">（テロップのすぐ下に金色の帯で出ます）</span></label>
         <label for="sct">スパチャの目標金額 <span class="hint">（円。0 なら目標バーなしで件数と合計だけ）</span></label>
         <div class="unit-input"><span>¥</span><input type="number" id="sct" value="0" min="0" step="1000" inputmode="numeric"></div>
-        <p class="hint" style="margin:6px 0 0">※ スーパーステッカーもスパチャとして数えます。海外のお金はその日の為替レートで円に直して足します（だいたいの金額です）。ギフトは件数とジュエル数（💎）を数えます。チャットは15秒ごとに読むので、表示まで少し遅れます。</p>
+        <p class="hint" style="margin:6px 0 0">※ スーパーステッカーもスパチャとして数えます。海外のお金はその日の為替レートで円に直して足します（だいたいの金額です）。ギフトは件数とジュエル数（💎）を、メンバーシップギフトは何人分かを数えます（金額には足しません）。新しくメンバーになった人も、お礼のテロップに出ます。チャットは15秒ごとに読むので、表示まで少し遅れます。</p>
         <label for="ch">YouTube チャンネルのハンドル</label>
         <input type="text" id="ch" placeholder="@yourchannel">
         <label for="key">YouTube API キー</label>
