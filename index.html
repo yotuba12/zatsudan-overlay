@@ -123,11 +123,6 @@
 
       <label for="m">テロップ <span class="hint">（1行に1つ。順番に流れます）</span></label>
       <textarea id="m">178cm 160kg 38歳 無職 栃木県宇都宮市在住 国立宇都宮大学工学部卒業(4留)</textarea>
-
-      <label for="m2">テロップ 2段目 <span class="hint">（1段目の下に、色を変えて流れます。空欄なら表示しない）</span></label>
-      <textarea id="m2">雑談配信は毎週○曜日 21時〜
-X（旧Twitter）でも配信のお知らせをしています</textarea>
-
       <div class="row">
         <div>
           <label for="speed">流れる速さ</label>
@@ -172,6 +167,11 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
           </div>
         </div>
         <p class="hint" style="margin:6px 0 0">※ 登録者が1,000人を超えると、YouTube は数を丸めて返します（例 1,234人 → 1,230人）。</p>
+        <label class="check"><input type="checkbox" id="scOn" checked> 💰 スパチャ・🎁 ギフトを数える</label>
+        <label class="check"><input type="checkbox" id="thx" checked> くれた人の名前をお礼のテロップで流す <span class="hint">（テロップのすぐ下に金色の帯で出ます）</span></label>
+        <label for="sct">スパチャの目標金額 <span class="hint">（円。0 なら目標バーなしで件数と合計だけ）</span></label>
+        <div class="unit-input"><span>¥</span><input type="number" id="sct" value="0" min="0" step="1000" inputmode="numeric"></div>
+        <p class="hint" style="margin:6px 0 0">※ スーパーステッカーもスパチャとして数えます。海外のお金はその日の為替レートで円に直して足します（だいたいの金額です）。ギフトは件数とジュエル数（💎）を数えます。チャットは15秒ごとに読むので、表示まで少し遅れます。</p>
         <label for="ch">YouTube チャンネルのハンドル</label>
         <input type="text" id="ch" placeholder="@yourchannel">
         <label for="key">YouTube API キー</label>
@@ -286,7 +286,7 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
 
 <script>
   const $ = id => document.getElementById(id);
-  const fields = ['clock', 'sec', 'w', 'm','m2','speed', 'size', 'goalOn', 'goal', 'step', 'sgoalOn', 'sgoal', 'sstep', 'ch', 'key', 'timer', 'start', 'y', 'tick', 'tr', 'cycOn', 'show', 'hide'];
+  const fields = ['clock', 'sec', 'w', 'm', 'speed', 'size', 'goalOn', 'goal', 'step', 'sgoalOn', 'sgoal', 'sstep', 'scOn', 'thx', 'sct', 'ch', 'key', 'timer', 'start', 'y', 'tick', 'tr', 'cycOn', 'show', 'hide'];
   const base = new URL('overlay.html', location.href).href;
 
   // 前回の入力を覚えておく（このブラウザの中だけ）
@@ -312,7 +312,6 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
     if (w > 0 && w < 1000) p.set('w', (Math.round(w * 10) / 10).toFixed(1)); // 小数第1位までそろえる
     const lines = id => $(id).value.split('\n').map(x => x.trim().replace(/\|/g, '｜')).filter(Boolean).join('|');
     const m = lines('m'); if (m) p.set('m', m);
-    const m2 = lines('m2'); if (m2) p.set('m2', m2);
     if ($('speed').value !== 'normal') p.set('speed', $('speed').value);
     if ($('size').value !== 'm') p.set('size', $('size').value);
     if (!$('timer').checked) p.set('timer', '0');
@@ -337,7 +336,14 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
       const sstep = parseInt($('sstep').value, 10) || 0;
       if (sstep > 0) p.set('sstep', sstep);
     }
-    if (likeOn || subOn) {
+    const scOn = $('scOn').checked;
+    if (scOn) {
+      p.set('sc', '1');
+      const sct = parseInt($('sct').value, 10) || 0;
+      if (sct > 0) p.set('sct', sct);
+      if (!$('thx').checked) p.set('thx', '0');
+    }
+    if (likeOn || subOn || scOn) {
       if ($('ch').value.trim()) p.set('ch', $('ch').value.trim());
       if ($('key').value.trim()) p.set('key', $('key').value.trim());
     }
@@ -349,7 +355,7 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
   function previewUrl(url) {
     const u = new URL(url);
     u.searchParams.set('preview', '1');
-    if ((u.searchParams.has('goal') || u.searchParams.has('sgoal')) && !u.searchParams.has('key')) u.searchParams.set('demo', '1');
+    if ((u.searchParams.has('goal') || u.searchParams.has('sgoal') || u.searchParams.has('sc')) && !u.searchParams.has('key')) u.searchParams.set('demo', '1');
     return u.href;
   }
 
@@ -375,7 +381,8 @@ X（旧Twitter）でも配信のお知らせをしています</textarea>
     ['goal', 'step'].forEach(k => $(k).disabled = !$('goalOn').checked);
     ['sgoal', 'sstep'].forEach(k => $(k).disabled = !$('sgoalOn').checked);
     ['show', 'hide'].forEach(k => $(k).disabled = !$('cycOn').checked);
-    ['ch', 'key'].forEach(k => $(k).disabled = !$('goalOn').checked && !$('sgoalOn').checked);
+    $('sct').disabled = $('thx').disabled = !$('scOn').checked;
+    ['ch', 'key'].forEach(k => $(k).disabled = !$('goalOn').checked && !$('sgoalOn').checked && !$('scOn').checked);
   };
   syncDisabled();
   $('form').addEventListener('change', syncDisabled);

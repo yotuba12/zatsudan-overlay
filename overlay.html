@@ -51,7 +51,7 @@
     max-width: 100%;
   }
   /* ラベルは不透明な札の上にあるので、ふち取り（影）をつけずにくっきり見せる */
-  .badge .label, .goal .label {
+  .badge .label, .goal .label, .sc .label {
     background: var(--bg2); color: var(--fg2); text-shadow: none;
     font-size: 0.7em; padding: 0.2em 0.6em; border-radius: 999px; white-space: nowrap;
     -webkit-font-smoothing: antialiased;
@@ -83,9 +83,9 @@
   .ticker .track { display: inline-block; padding-left: 100%; animation: scroll linear infinite; }
   .ticker .item { margin-right: 3em; }
   .ticker .item::before { content: "★ "; color: var(--bg2); }
-  /* 2段目は色を反転して区別する */
-  .ticker.alt { background: var(--panel2); color: var(--fg2); text-shadow: 0 0 0.2em rgba(255,255,255, calc(0.8 * (1 - var(--alpha)))); }
-  .ticker.alt .item::before { content: "♪ "; color: var(--bg); }
+  /* 2段目：スパチャ・ギフトをくれた人へのお礼（どの色でも金色の帯） */
+  .ticker.thanks { background: rgba(255,213,79, var(--alpha)); color: #5a3b00; text-shadow: 0 0 0.2em rgba(255,255,255, calc(0.8 * (1 - var(--alpha)))); }
+  .ticker.thanks .item::before { content: none; }
   @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 
   /* 目標バー（高評価・登録者を横に並べる） */
@@ -97,7 +97,7 @@
     box-shadow: var(--shadow);
   }
   .goal .row { display: flex; align-items: center; gap: 0.4em; }
-  .goal .label { font-weight: 700; letter-spacing: 0.04em; padding: 0.15em 0.55em; }
+  .goal .label, .sc .label { font-weight: 700; letter-spacing: 0.04em; padding: 0.15em 0.55em; }
   .goal .left { margin-left: auto; font-size: 0.72em; white-space: nowrap; }
   .goal .count { margin-top: 0.15em; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .goal .count small { font-size: 0.8em; opacity: .85; }
@@ -112,9 +112,33 @@
   @keyframes shine { from { background-position: 200% 0; } to { background-position: 0 0; } }
   @keyframes pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
 
-  /* 一定時間ごとに目標バーとテロップをふわっと隠す（時計・配信時間は出したまま） */
-  .goals, .tickers { transition: opacity .8s ease; }
-  body.resting .goals, body.resting .tickers { opacity: 0; }
+  /* スパチャ・ギフトのカウンター */
+  .scwrap { padding: 0 3vmin; }
+  .sc {
+    background: var(--panel); color: var(--fg); text-shadow: var(--text-glow); border-radius: 0.7em;
+    padding: 0.35em 0.65em 0.45em; font-weight: 700; line-height: 1.25;
+    box-shadow: var(--shadow);
+  }
+  .sc .cols { display: flex; gap: 0.6em; }
+  .sc .col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0.15em; }
+  .sc .col + .col { border-left: 0.1em solid var(--bg2); padding-left: 0.6em; }
+  .sc .val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sc .val small { font-size: 0.8em; opacity: .9; }
+  .sc .goalline { margin-top: 0.3em; display: flex; font-size: 0.72em; white-space: nowrap; }
+  .sc .goalline .left { margin-left: auto; }
+  .sc .track { margin-top: 0.2em; height: 0.5em; border-radius: 999px; background: var(--bg2); overflow: hidden; }
+  .sc .fill { height: 100%; width: 0; border-radius: 999px; background: var(--fg2); transition: width .8s ease-out; }
+  .sc .note { margin-top: 0.3em; font-size: 0.55em; font-weight: 700; opacity: .9; }
+  .sc.done .fill {
+    background: linear-gradient(90deg, var(--fg2), #ffd54f, var(--fg2)); background-size: 200% 100%;
+    animation: shine 1.2s linear infinite;
+  }
+  .sc.bump { animation: bump .7s ease-out; }
+  @keyframes bump { 0% { transform: scale(1); } 30% { transform: scale(1.06); } 100% { transform: scale(1); } }
+
+  /* 一定時間ごとに目標バー・スパチャ・テロップをふわっと隠す（時計・配信時間・体重は出したまま） */
+  .goals, .scwrap, .tickers { transition: opacity .8s ease; }
+  body.resting .goals, body.resting .scwrap, body.resting .tickers { opacity: 0; }
 
   [hidden] { display: none !important; }
 </style>
@@ -127,10 +151,23 @@
       <div class="badge" id="weight" hidden><span class="label">本日の体重</span><span class="text"></span></div>
     </div>
     <div class="goals" id="goals"></div>
+    <div class="scwrap" id="scwrap" hidden>
+      <div class="sc" id="sc">
+        <div class="cols">
+          <div class="col"><span class="label">💰 スパチャ</span><span class="val"><span id="sc-yen">¥0</span> <small id="sc-n">0件</small></span></div>
+          <div class="col"><span class="label">🎁 ギフト</span><span class="val"><span id="gift-n">0件</span> <small id="gift-j">💎0</small></span></div>
+        </div>
+        <div id="sc-goal" hidden>
+          <div class="goalline"><span id="sc-target"></span><span class="left" id="sc-left"></span></div>
+          <div class="track"><div class="fill" id="sc-fill"></div></div>
+        </div>
+        <div class="note" id="sc-note" hidden></div>
+      </div>
+    </div>
   </div>
   <div class="tickers" id="tickers" hidden>
     <div class="ticker" id="ticker" hidden><div class="track"></div></div>
-    <div class="ticker alt" id="ticker2" hidden><div class="track"></div></div>
+    <div class="ticker thanks" id="ticker3" hidden><div class="track"></div></div>
   </div>
 
   <template id="goal-tpl">
@@ -219,7 +256,7 @@
     el.hidden = false;
   }
 
-  // テロップ（| で区切ると複数のお知らせを順番に流す）。m=1段目, m2=2段目
+  // テロップ（| で区切ると複数のお知らせを順番に流す）。m=お知らせ。2段目はお礼のテロップ（下の makeThanksTicker）
   const speed = { slow: 60, normal: 100, fast: 150 }[p.get('speed')] || 100; // px/秒
   function setupTicker(id, param) {
     const msgs = (p.get(param) || '').split('|').map(x => x.trim()).filter(Boolean);
@@ -240,8 +277,8 @@
     return true;
   }
   const t1 = setupTicker('ticker', 'm');
-  const t2 = setupTicker('ticker2', 'm2');
-  if (t1 || t2) {
+  const thanksOn = p.get('sc') === '1' && p.get('thx') !== '0';
+  if (t1 || thanksOn) {
     const box = document.getElementById('tickers');
     if (tickerOnTop) document.getElementById('stack').appendChild(box);
     box.hidden = false;
@@ -298,18 +335,132 @@
   const num = k => Math.max(0, parseInt(p.get(k), 10) || 0);
   const likeGoal = num('goal') > 0 ? makeGoal('👍 高評価目標', num('goal'), num('step')) : null;
   const subGoal = num('sgoal') > 0 ? makeGoal('🔔 登録者目標', num('sgoal'), num('sstep')) : null;
+  const sc = p.get('sc') === '1' ? makeSuperChat(num('sct')) : null;
 
-  if (likeGoal || subGoal) startGoals();
+  if (likeGoal || subGoal || sc) startYouTube();
 
-  function startGoals() {
+  // ===== お礼のテロップ（2段目）=====
+  // 流れている途中で中身を差しかえるとガタつくので、1周流れ終わったときに新しい内容にする
+  function makeThanksTicker() {
+    const el = document.getElementById('ticker3');
+    const track = el.querySelector('.track');
+    let pending = null;
+    const build = list => {
+      track.textContent = '';
+      list.forEach(text => {
+        const span = document.createElement('span');
+        span.className = 'item';
+        span.textContent = text;
+        track.appendChild(span);
+      });
+      el.hidden = !list.length;
+      requestAnimationFrame(() => { track.style.animationDuration = (track.scrollWidth / speed) + 's'; });
+    };
+    track.addEventListener('animationiteration', () => { if (pending) { build(pending); pending = null; } });
+    return { set(list) { if (el.hidden) build(list); else pending = list; } };
+  }
+
+  // ===== スパチャ・ギフトのカウンター =====
+  // sc=1 で表示, sct=スパチャの目標金額（円。0 なら目標なし）
+  // スーパーステッカーもスパチャとして数える。海外のお金は円に直して足す。ギフトはジュエル数を足す。
+  function makeSuperChat(target) {
+    const $s = id => document.getElementById(id);
+    const wrap = $s('scwrap'), box = $s('sc');
+    let state = { n: 0, yen: 0, g: 0, j: 0 };
+    let seen = new Set(), storeKey = null;
+    let donors = []; // お礼テロップに流す文（この配信の分、新しい15件）
+    if (target > 0) $s('sc-goal').hidden = false;
+    const thanks = thanksOn ? makeThanksTicker() : null;
+    const showThanks = () => { if (thanks) thanks.set(donors); };
+    const cleanName = name => {
+      name = String(name || '名無し').replace(/^@/, '').trim();
+      return name.length > 20 ? name.slice(0, 20) + '…' : name;
+    };
+    const addDonor = text => { donors.push(text); donors = donors.slice(-15); showThanks(); };
+
+    const render = () => {
+      wrap.hidden = false;
+      $s('sc-yen').textContent = '¥' + Math.round(state.yen).toLocaleString();
+      $s('sc-n').textContent = state.n + '件';
+      $s('gift-n').textContent = state.g + '件';
+      $s('gift-j').textContent = '💎' + state.j.toLocaleString();
+      if (target > 0) {
+        const done = state.yen >= target;
+        $s('sc-target').textContent = '目標 ¥' + target.toLocaleString();
+        $s('sc-left').textContent = done ? '達成！🎉' : 'あと ¥' + Math.ceil(target - state.yen).toLocaleString();
+        $s('sc-fill').style.width = Math.min(100, state.yen / target * 100) + '%';
+        box.classList.toggle('done', done);
+      }
+    };
+    const bump = () => { box.classList.remove('bump'); void box.offsetWidth; box.classList.add('bump'); };
+    // 配信ごとに数をスマホの中に覚えておく（途中でページが読み込み直されても続きから数える）
+    const save = () => {
+      if (!storeKey) return;
+      try { localStorage.setItem(storeKey, JSON.stringify({ ...state, donors, seen: [...seen].slice(-1500) })); } catch (e) {}
+    };
+    const add = (id, fn) => {
+      if (seen.has(id)) return;
+      seen.add(id); fn(); bump(); render(); save();
+    };
+    return {
+      useVideo(videoId) {
+        storeKey = 'zatsudan-sc:' + videoId;
+        try {
+          const s = JSON.parse(localStorage.getItem(storeKey) || 'null');
+          if (s) {
+            state = { n: s.n || 0, yen: s.yen || 0, g: s.g || 0, j: s.j || 0 };
+            seen = new Set(s.seen || []);
+            donors = Array.isArray(s.donors) ? s.donors : [];
+          }
+        } catch (e) {}
+        render();
+        showThanks();
+      },
+      has: id => seen.has(id),
+      // display は YouTube が付ける金額の文字（例 ¥1,000 / $5.00）。お礼テロップにはこれをそのまま出す
+      addSuperChat(id, yen, name, display) {
+        add(id, () => {
+          state.n++; state.yen += yen;
+          addDonor(`💰 ${cleanName(name)}さん ${display || '¥' + Math.round(yen).toLocaleString()} ありがとう！`);
+        });
+      },
+      addGift(id, jewels, name) {
+        add(id, () => {
+          state.g++; state.j += jewels;
+          addDonor(`🎁 ${cleanName(name)}さん ギフト（💎${jewels}）ありがとう！`);
+        });
+      },
+      show: render,
+      note(msg) {
+        const n = $s('sc-note');
+        n.textContent = msg || '';
+        n.hidden = !(msg && isPreview);
+        if (msg) console.warn('[スパチャ]', msg);
+        render();
+      },
+    };
+  }
+
+  function startYouTube() {
     // デモ（API キーなしで見た目を確認する）
     if (p.get('demo') === '1') {
       if (likeGoal) { let n = Math.max(0, num('goal') - 6); likeGoal.set(n); setInterval(() => likeGoal.set(++n), 1200); }
       if (subGoal) { let n = Math.max(0, num('sgoal') - 3); subGoal.set(n); setInterval(() => subGoal.set(++n), 3000); }
+      if (sc) {
+        sc.show();
+        let i = 0;
+        const pick = a => a[Math.floor(Math.random() * a.length)];
+        const names = ['たろう', 'はなこ', '@mike_fan', 'よーすけ推し', 'ダイエット応援団'];
+        setInterval(() => {
+          i++;
+          if (Math.random() < 0.6) { const yen = pick([500, 1000, 2000, 5000, 10000]); sc.addSuperChat('demo' + i, yen, pick(names), '¥' + yen.toLocaleString()); }
+          else sc.addGift('demo' + i, pick([10, 50, 100]), pick(names));
+        }, 3500);
+      }
       return;
     }
 
-    const all = [likeGoal, subGoal].filter(Boolean);
+    const all = [likeGoal, subGoal, sc].filter(Boolean);
     const noteAll = msg => all.forEach(g => g.note(msg));
     const key = (p.get('key') || '').trim();
     if (!key) { noteAll('API キーが未設定です'); return; }
@@ -350,22 +501,85 @@
       setTimeout(pollSubs, everyMs);
     }
 
-    // --- 高評価数（今ライブ中の配信を探してから、その動画の数を取る） ---
+    // --- 今ライブ中の配信を探す（高評価とスパチャで使う） ---
     // 配信の検索は API 量が多いので、見つかるまで3分おきに
+    const liveNote = msg => [likeGoal, sc].forEach(g => g && g.note(msg));
     async function findLive() {
       try {
         const data = await api('search', { part: 'id', channelId: await getChannelId(), eventType: 'live', type: 'video', maxResults: 1 });
         if (data.items && data.items.length) {
           videoId = data.items[0].id.videoId;
-          likeGoal.note('');
-          pollLikes();
+          liveNote('');
+          onLive();
           return;
         }
-        likeGoal.note('ライブ配信が見つかりません。3分後にもう一度探します');
+        liveNote('ライブ配信が見つかりません。3分後にもう一度探します');
       } catch (e) {
-        likeGoal.note('エラー: ' + e.message);
+        liveNote('エラー: ' + e.message);
       }
       setTimeout(findLive, 180000);
+    }
+    function onLive() {
+      if (likeGoal) pollLikes();
+      if (sc) startChat();
+    }
+
+    // --- スパチャ・ギフト（ライブのチャットを15秒ごとに読む） ---
+    let rates = null;
+    async function toYen(micros, currency) {
+      const amount = micros / 1e6;
+      if (currency === 'JPY') return amount;
+      if (!rates) {
+        // 無料の為替レート（1日1回更新）。1円あたりの各国のお金の量が返る
+        const res = await fetch('https://open.er-api.com/v6/latest/JPY');
+        const data = await res.json();
+        if (data.result !== 'success') throw new Error('為替レートが取れません');
+        rates = data.rates;
+      }
+      const rate = rates[currency];
+      if (!rate) { console.warn('[スパチャ] 知らないお金の種類:', currency); return 0; }
+      return amount / rate;
+    }
+    async function startChat() {
+      try {
+        const data = await api('videos', { part: 'liveStreamingDetails', id: videoId });
+        const item = data.items && data.items[0];
+        const chatId = item && item.liveStreamingDetails && item.liveStreamingDetails.activeLiveChatId;
+        if (!chatId) throw new Error('この配信のチャットが見つかりません');
+        sc.useVideo(videoId);
+        sc.note('');
+        pollChat(chatId, '');
+      } catch (e) {
+        sc.note('エラー: ' + e.message);
+        setTimeout(startChat, 60000);
+      }
+    }
+    async function pollChat(chatId, pageToken) {
+      let wait = 15000;
+      try {
+        const params = { liveChatId: chatId, part: 'snippet,authorDetails', maxResults: 2000 };
+        if (pageToken) params.pageToken = pageToken;
+        const data = await api('liveChat/messages', params);
+        for (const it of data.items || []) {
+          const s = it.snippet;
+          const name = it.authorDetails && it.authorDetails.displayName;
+          if (sc.has(it.id)) continue;
+          if (s.type === 'superChatEvent' || s.type === 'superStickerEvent') {
+            const d = s.superChatDetails || s.superStickerDetails || {};
+            sc.addSuperChat(it.id, await toYen(Number(d.amountMicros) || 0, d.currency), name, d.amountDisplayString);
+          } else if (s.type === 'giftEvent') {
+            sc.addGift(it.id, Number(s.giftDetails && s.giftDetails.jewelsAmount) || 0, name);
+          }
+        }
+        if (data.offlineAt) { sc.note('配信が終了しました'); return; }
+        // 読み終わった位置を進めるのは、全部数え終わってから（途中で失敗したら次回やり直す）
+        pageToken = data.nextPageToken || pageToken;
+        wait = Math.max(wait, data.pollingIntervalMillis || 0);
+        sc.note('');
+      } catch (e) {
+        sc.note('エラー: ' + e.message);
+      }
+      setTimeout(() => pollChat(chatId, pageToken), wait);
     }
     async function pollLikes() {
       try {
@@ -382,7 +596,7 @@
     }
 
     if (subGoal) pollSubs();
-    if (likeGoal) { if (videoId) pollLikes(); else findLive(); }
+    if (likeGoal || sc) { if (videoId) onLive(); else findLive(); }
   }
 </script>
 </body>
