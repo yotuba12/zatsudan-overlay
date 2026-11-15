@@ -441,15 +441,32 @@
     const wrap = $s('scwrap'), box = $s('sc');
     let state = { n: 0, yen: 0, g: 0, j: 0, mg: 0 };
     let seen = new Set(), storeKey = null;
-    let donors = []; // お礼テロップに流す文（この配信の分、新しい15件）
+    // お礼テロップに流す文 { text, at }。at はスパチャなどが送られた時刻。
+    // 送られてから10分たった名前は消す（thxm=分 で変えられる）。新しい15件まで。
+    let donors = [];
+    const THANKS_MS = Math.max(1, parseInt(p.get('thxm'), 10) || 10) * 60000;
     if (target > 0) $s('sc-goal').hidden = false;
     const thanks = thanksOn ? makeThanksTicker() : null;
-    const showThanks = () => { if (thanks) thanks.set(donors); };
+    const fresh = () => donors.filter(d => Date.now() - d.at < THANKS_MS);
+    const showThanks = () => { if (thanks) thanks.set(fresh().map(d => d.text)); };
     const cleanName = name => {
       name = String(name || '名無し').replace(/^@/, '').trim();
       return name.length > 20 ? name.slice(0, 20) + '…' : name;
     };
-    const addDonor = text => { donors.push(text); donors = donors.slice(-15); showThanks(); };
+    const addDonor = (text, at) => {
+      at = at || Date.now();
+      if (Date.now() - at >= THANKS_MS) return; // 開いたときに読んだ昔の分（10分以上前）は流さない
+      donors.push({ text, at });
+      donors.sort((a, b) => a.at - b.at);
+      donors = donors.slice(-15);
+      showThanks();
+    };
+    // 20秒ごとに、10分たった名前を消す
+    setInterval(() => {
+      const before = donors.length;
+      donors = fresh();
+      if (donors.length !== before) { save(); showThanks(); }
+    }, 20000);
 
     const render = () => {
       wrap.hidden = false;
@@ -484,7 +501,7 @@
           if (s) {
             state = { n: s.n || 0, yen: s.yen || 0, g: s.g || 0, j: s.j || 0, mg: s.mg || 0 };
             seen = new Set(s.seen || []);
-            donors = Array.isArray(s.donors) ? s.donors : [];
+            donors = (Array.isArray(s.donors) ? s.donors : []).filter(d => d && typeof d === 'object' && d.text && d.at);
           }
         } catch (e) {}
         render();
@@ -492,26 +509,27 @@
       },
       has: id => seen.has(id),
       // display は YouTube が付ける金額の文字（例 ¥1,000 / $5.00）。お礼テロップにはこれをそのまま出す
-      addSuperChat(id, yen, name, display) {
+      // at はチャットに送られた時刻（ミリ秒）。省略すると今
+      addSuperChat(id, yen, name, display, at) {
         add(id, () => {
           state.n++; state.yen += yen;
-          addDonor(`💰 ${cleanName(name)}さん ${display || '¥' + Math.round(yen).toLocaleString()} ありがとう！`);
+          addDonor(`💰 ${cleanName(name)}さん ${display || '¥' + Math.round(yen).toLocaleString()} ありがとう！`, at);
         });
       },
-      addGift(id, jewels, name) {
+      addGift(id, jewels, name, at) {
         add(id, () => {
           state.g++; state.j += jewels;
-          addDonor(`🎁 ${cleanName(name)}さん ギフト（💎${jewels}）ありがとう！`);
+          addDonor(`🎁 ${cleanName(name)}さん ギフト（💎${jewels}）ありがとう！`, at);
         });
       },
-      addMemberGift(id, count, name) {
+      addMemberGift(id, count, name, at) {
         add(id, () => {
           state.mg += count;
-          addDonor(`👑 ${cleanName(name)}さん メンバーシップ ${count}人分ギフト ありがとう！`);
+          addDonor(`👑 ${cleanName(name)}さん メンバーシップ ${count}人分ギフト ありがとう！`, at);
         });
       },
-      addNewMember(id, name) {
-        add(id, () => { addDonor(`👑 ${cleanName(name)}さん メンバー加入ありがとう！`); });
+      addNewMember(id, name, at) {
+        add(id, () => { addDonor(`👑 ${cleanName(name)}さん メンバー加入ありがとう！`, at); });
       },
       show: render,
       note(msg) {
@@ -558,7 +576,11 @@
       if (!res.ok) throw new Error((data.error && data.error.message) || ('HTTP ' + res.status));
       return data;
     };
-    const everyMs = Math.max(30, parseInt(p.get('every'), 10) || 60) * 1000;
+    // API の1日の上限（10,000）に、1日15時間の配信でも収まる間隔にしている（約8,000/15時間）
+    //   チャット: 40秒ごと（1回 5）/ 高評価: 2分ごと（1回 1）/ 登録者: 3分ごと（1回 1）/ 配信探し: 3分ごと（1回 100、見つかるまで）
+    const LIKES_MS = 120000, SUBS_MS = 180000, CHAT_MS = 40000, FIND_MS = 180000;
+    // 設定ページのプレビューでは1回だけ取得してくり返さない（開きっぱなしで API を使い切らないように）
+    const again = (fn, ms) => { if (!isPreview) setTimeout(fn, ms); };
     let channelId = null;
     let videoId = (p.get('v') || '').trim();
 
@@ -584,7 +606,7 @@
       } catch (e) {
         subGoal.note('エラー: ' + e.message);
       }
-      setTimeout(pollSubs, everyMs);
+      again(pollSubs, SUBS_MS);
     }
 
     // --- 今ライブ中の配信を探す（高評価とスパチャで使う） ---
@@ -603,7 +625,7 @@
       } catch (e) {
         liveNote('エラー: ' + e.message);
       }
-      setTimeout(findLive, 180000);
+      again(findLive, FIND_MS);
     }
     function onLive() {
       if (likeGoal) pollLikes();
@@ -621,7 +643,7 @@
         setTimerStart(Date.parse(t));
       } catch (e) {
         console.warn('[配信時間]', e.message);
-        setTimeout(fetchLiveStart, 60000);
+        again(fetchLiveStart, 60000);
       }
     }
 
@@ -652,11 +674,11 @@
         pollChat(chatId, '');
       } catch (e) {
         sc.note('エラー: ' + e.message);
-        setTimeout(startChat, 60000);
+        again(startChat, 60000);
       }
     }
     async function pollChat(chatId, pageToken) {
-      let wait = 15000;
+      let wait = CHAT_MS;
       try {
         const params = { liveChatId: chatId, part: 'snippet,authorDetails', maxResults: 2000 };
         if (pageToken) params.pageToken = pageToken;
@@ -664,18 +686,19 @@
         for (const it of data.items || []) {
           const s = it.snippet;
           const name = it.authorDetails && it.authorDetails.displayName;
+          const at = Date.parse(s.publishedAt) || Date.now(); // 送られた時刻（お礼テロップを10分で消すのに使う）
           if (sc.has(it.id)) continue;
           if (s.type === 'superChatEvent' || s.type === 'superStickerEvent') {
             const d = s.superChatDetails || s.superStickerDetails || {};
-            sc.addSuperChat(it.id, await toYen(Number(d.amountMicros) || 0, d.currency), name, d.amountDisplayString);
+            sc.addSuperChat(it.id, await toYen(Number(d.amountMicros) || 0, d.currency), name, d.amountDisplayString, at);
           } else if (s.type === 'giftEvent') {
-            sc.addGift(it.id, Number(s.giftDetails && s.giftDetails.jewelsAmount) || 0, name);
+            sc.addGift(it.id, Number(s.giftDetails && s.giftDetails.jewelsAmount) || 0, name, at);
           } else if (s.type === 'membershipGiftingEvent') {
             // メンバーシップギフト（何人分贈ったか）。金額は YouTube が教えてくれないので合計には足さない
-            sc.addMemberGift(it.id, Number(s.membershipGiftingDetails && s.membershipGiftingDetails.giftMembershipsCount) || 1, name);
+            sc.addMemberGift(it.id, Number(s.membershipGiftingDetails && s.membershipGiftingDetails.giftMembershipsCount) || 1, name, at);
           } else if (s.type === 'newSponsorEvent') {
             // 新しくメンバーになった人（数は数えず、お礼テロップにだけ出す）
-            sc.addNewMember(it.id, name);
+            sc.addNewMember(it.id, name, at);
           }
         }
         if (data.offlineAt) { sc.note('配信が終了しました'); return; }
@@ -686,7 +709,7 @@
       } catch (e) {
         sc.note('エラー: ' + e.message);
       }
-      setTimeout(() => pollChat(chatId, pageToken), wait);
+      again(() => pollChat(chatId, pageToken), wait);
     }
     async function pollLikes() {
       try {
@@ -699,7 +722,7 @@
       } catch (e) {
         likeGoal.note('エラー: ' + e.message);
       }
-      setTimeout(pollLikes, everyMs);
+      again(pollLikes, LIKES_MS);
     }
 
     if (subGoal) pollSubs();
