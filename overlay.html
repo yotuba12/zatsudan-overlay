@@ -233,10 +233,18 @@
     el.hidden = false;
   }
 
-  // 配信時間（start=HH:MM があればその時刻から、なければページを開いた時から数える）
-  if (p.get('timer') !== '0') {
+  // 配信時間。どこから数えるかは、次の順で決める。
+  //  1) start=HH:MM が指定されていれば、その時刻から
+  //  2) API キーとチャンネルがあれば、YouTube から本当の配信開始時刻を取ってそこから（下の startYouTube が setTimerStart を呼ぶ）
+  //  3) それが分かるまでは、直前（10分以内）まで数えていた続きから。なければページを開いた時から
+  // （ウィジェットを貼り直したり PRISM を開き直したりしても 0 に戻らないようにするため）
+  const timerOn = p.get('timer') !== '0';
+  let explicitStart = false;
+  let setTimerStart = () => {};
+  if (timerOn) {
     const el = document.getElementById('timer');
     const out = el.querySelector('.text');
+    const STORE = 'zatsudan-timer';
     let start = Date.now();
     const s = p.get('start');
     if (s && /^\d{1,2}:\d{2}$/.test(s)) {
@@ -244,12 +252,28 @@
       const d = new Date(); d.setHours(h, m, 0, 0);
       if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); // 日付をまたいだ配信
       start = d.getTime();
+      explicitStart = true;
+    } else {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+        if (saved && Date.now() - saved.seen < 10 * 60 * 1000 && saved.start <= Date.now()) start = saved.start;
+      } catch (e) {}
     }
+    const save = () => {
+      if (explicitStart) return;
+      try { localStorage.setItem(STORE, JSON.stringify({ start, seen: Date.now() })); } catch (e) {}
+    };
     const tick = () => {
       const sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
       out.textContent = `${Math.floor(sec / 3600)}:${pad(Math.floor(sec / 60) % 60)}:${pad(sec % 60)}`;
     };
+    setTimerStart = t => {
+      if (explicitStart || !(t > 0) || t > Date.now() + 60000) return;
+      start = Math.min(t, Date.now());
+      save(); tick();
+    };
     tick(); setInterval(tick, 1000);
+    save(); setInterval(save, 10000);
     el.hidden = false;
   }
 
@@ -342,7 +366,10 @@
   const subGoal = num('sgoal') > 0 ? makeGoal('🔔 登録者', num('sgoal'), num('sstep')) : null;
   const sc = p.get('sc') === '1' ? makeSuperChat(num('sct')) : null;
 
-  if (likeGoal || subGoal || sc) startYouTube();
+  // 配信時間のために、YouTube から配信開始時刻を取るか（API キーとチャンネルがあるときだけ）
+  const wantLiveStart = timerOn && !explicitStart && !!(p.get('key') || '').trim() && !!(p.get('ch') || '').trim();
+
+  if (likeGoal || subGoal || sc || wantLiveStart) startYouTube();
 
   // ===== お礼のテロップ（2段目）=====
   // 流れている途中で中身を差しかえるとガタつくので、1周流れ終わったときに新しい内容にする。
@@ -555,6 +582,21 @@
     function onLive() {
       if (likeGoal) pollLikes();
       if (sc) startChat();
+      if (wantLiveStart) fetchLiveStart();
+    }
+
+    // --- 配信が始まった時刻（配信時間をここから数える） ---
+    async function fetchLiveStart() {
+      try {
+        const data = await api('videos', { part: 'liveStreamingDetails', id: videoId });
+        const item = data.items && data.items[0];
+        const t = item && item.liveStreamingDetails && item.liveStreamingDetails.actualStartTime;
+        if (!t) throw new Error('配信開始時刻がまだ分かりません');
+        setTimerStart(Date.parse(t));
+      } catch (e) {
+        console.warn('[配信時間]', e.message);
+        setTimeout(fetchLiveStart, 60000);
+      }
     }
 
     // --- スパチャ・ギフト（ライブのチャットを15秒ごとに読む） ---
@@ -635,7 +677,7 @@
     }
 
     if (subGoal) pollSubs();
-    if (likeGoal || sc) { if (videoId) onLive(); else findLive(); }
+    if (likeGoal || sc || wantLiveStart) { if (videoId) onLive(); else findLive(); }
   }
 </script>
 </body>
