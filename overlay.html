@@ -576,9 +576,9 @@
       if (!res.ok) throw new Error((data.error && data.error.message) || ('HTTP ' + res.status));
       return data;
     };
-    // API の1日の上限（10,000）に、1日15時間の配信でも収まる間隔にしている（約8,000/15時間）
-    //   チャット: 40秒ごと（1回 5）/ 高評価: 2分ごと（1回 1）/ 登録者: 3分ごと（1回 1）/ 配信探し: 3分ごと（1回 100、見つかるまで）
-    const LIKES_MS = 120000, SUBS_MS = 180000, CHAT_MS = 40000, FIND_MS = 180000;
+    // API の1日の上限（10,000）に、1日20時間の配信でも収まる間隔にしている（約7,850/20時間）
+    //   チャット: 50秒ごと（1回 5）/ 高評価: 3分ごと（1回 1）/ 登録者: 5分ごと（1回 1）/ 配信探し: 3分ごと（1回 100、見つかるまで）
+    const LIKES_MS = 180000, SUBS_MS = 300000, CHAT_MS = 50000, FIND_MS = 180000;
     // 設定ページのプレビューでは1回だけ取得してくり返さない（開きっぱなしで API を使い切らないように）
     const again = (fn, ms) => { if (!isPreview) setTimeout(fn, ms); };
     let channelId = null;
@@ -647,7 +647,7 @@
       }
     }
 
-    // --- スパチャ・ギフト（ライブのチャットを15秒ごとに読む） ---
+    // --- スパチャ・ギフト（ライブのチャットを50秒ごとに読む） ---
     let rates = null;
     async function toYen(micros, currency) {
       const amount = micros / 1e6;
