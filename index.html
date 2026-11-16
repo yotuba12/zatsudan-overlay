@@ -46,6 +46,8 @@
   .preview-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
   .preview-head h2 { font-size: 1.05rem; margin: 0; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .sndtest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .sndtest button { font: inherit; font-size: 0.9em; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--accent); background: transparent; color: var(--accent); font-weight: 700; cursor: pointer; }
   .seg button { border: 0; background: transparent; color: var(--text); font: inherit; padding: 4px 12px; cursor: pointer; }
   .seg button.on { background: var(--accent); color: var(--accent-text); }
   .stage {
@@ -171,6 +173,16 @@
         <label class="check"><input type="checkbox" id="thx" checked> くれた人・メンバーになった人の名前をお礼のテロップで流す<span class="hint">（テロップのすぐ下に金色の帯で出ます）</span></label>
         <label for="sct">スパチャの目標金額 <span class="hint">（円。0 なら目標バーなしで件数と合計だけ）</span></label>
         <div class="unit-input"><span>¥</span><input type="number" id="sct" value="0" min="0" step="1000" inputmode="numeric"></div>
+        <label class="check"><input type="checkbox" id="snd"> 🔔 スパチャが来たら効果音を鳴らす<span class="hint">（1万円以上は豪華な音になります）</span></label>
+        <label class="check"><input type="checkbox" id="sndg"> ギフト・メンバーシップギフト・メンバー加入でも鳴らす</label>
+        <label for="sndv">音量 <span class="hint">（<span id="sndv-val">70</span>%）</span></label>
+        <input type="range" id="sndv" min="10" max="100" step="10" value="70">
+        <div class="sndtest">
+          <button type="button" data-snd="sc">💰 スパチャの音</button>
+          <button type="button" data-snd="big">✨ 1万円以上の音</button>
+          <button type="button" data-snd="gift">🎁 ギフトの音</button>
+        </div>
+        <p class="hint" style="margin:6px 0 0">※ ボタンで音を試せます（このページのプレビューでは鳴りません）。音もチャットを読んだときに鳴るので、最大50秒ほど遅れます。PRISM で音が配信に乗るかは、動作確認用の URL（末尾に <code>&amp;demo=1</code> を付ける）で一度試してください。</p>
         <p class="hint" style="margin:6px 0 0">※ スーパーステッカーもスパチャとして数えます。海外のお金はその日の為替レートで円に直して足します（だいたいの金額です）。ギフトは件数とジュエル数（💎）を、メンバーシップギフトは何人分かを数えます（金額には足しません）。新しくメンバーになった人も、お礼のテロップに出ます。チャットは50秒ごとに読むので、表示まで最大50秒ほど遅れます（その間に来た分も取りこぼさず数えます）。</p>
         <label for="ch">YouTube チャンネルのハンドル</label>
         <input type="text" id="ch" placeholder="@yourchannel">
@@ -287,7 +299,7 @@
 
 <script>
   const $ = id => document.getElementById(id);
-  const fields = ['clock', 'sec', 'w', 'm', 'speed', 'size', 'goalOn', 'goal', 'step', 'sgoalOn', 'sgoal', 'sstep', 'scOn', 'thx', 'sct', 'ch', 'key', 'timer', 'start', 'y', 'tick', 'tr', 'cycOn', 'show', 'hide'];
+  const fields = ['clock', 'sec', 'w', 'm', 'speed', 'size', 'goalOn', 'goal', 'step', 'sgoalOn', 'sgoal', 'sstep', 'scOn', 'thx', 'sct', 'snd', 'sndg', 'sndv', 'ch', 'key', 'timer', 'start', 'y', 'tick', 'tr', 'cycOn', 'show', 'hide'];
   const base = new URL('overlay.html', location.href).href;
 
   // 前回の入力を覚えておく（このブラウザの中だけ）
@@ -320,6 +332,7 @@
     if ($('y').value !== '14') p.set('y', $('y').value);
     if ($('tick').value === 'bottom') p.set('tick', 'bottom');
     $('tr-val').textContent = $('tr').value;
+    $('sndv-val').textContent = $('sndv').value;
     if ($('tr').value !== '0') p.set('tr', $('tr').value);
     const show = parseInt($('show').value, 10), hide = parseInt($('hide').value, 10);
     if ($('cycOn').checked && show > 0 && hide > 0) { p.set('show', show); p.set('hide', hide); }
@@ -343,6 +356,11 @@
       const sct = parseInt($('sct').value, 10) || 0;
       if (sct > 0) p.set('sct', sct);
       if (!$('thx').checked) p.set('thx', '0');
+      if ($('snd').checked) {
+        p.set('snd', '1');
+        if ($('sndv').value !== '70') p.set('sndv', $('sndv').value);
+        if ($('sndg').checked) p.set('sndg', '1');
+      }
     }
     if (likeOn || subOn || scOn) {
       if ($('ch').value.trim()) p.set('ch', $('ch').value.trim());
@@ -382,7 +400,8 @@
     ['goal', 'step'].forEach(k => $(k).disabled = !$('goalOn').checked);
     ['sgoal', 'sstep'].forEach(k => $(k).disabled = !$('sgoalOn').checked);
     ['show', 'hide'].forEach(k => $(k).disabled = !$('cycOn').checked);
-    $('sct').disabled = $('thx').disabled = !$('scOn').checked;
+    $('sct').disabled = $('thx').disabled = $('snd').disabled = !$('scOn').checked;
+    $('sndg').disabled = $('sndv').disabled = !$('scOn').checked || !$('snd').checked;
     ['ch', 'key'].forEach(k => $(k).disabled = !$('goalOn').checked && !$('sgoalOn').checked && !$('scOn').checked);
   };
   syncDisabled();
@@ -397,6 +416,37 @@
     $('copy').textContent = 'コピーしました！';
     setTimeout(() => $('copy').textContent = 'コピー', 1500);
   });
+
+  // 効果音のお試し（overlay.html の makeChime と同じ音）
+  let actx = null;
+  const bell = (c, f, t, len, g, vol) => {
+    const at = c.currentTime + t;
+    [[1, 1], [2.76, 0.25], [5.4, 0.08]].forEach(([mul, amp]) => {
+      const o = c.createOscillator(), v = c.createGain();
+      o.type = 'sine';
+      o.frequency.value = f * mul;
+      v.gain.setValueAtTime(0, at);
+      v.gain.linearRampToValueAtTime(g * amp * vol, at + 0.005);
+      v.gain.exponentialRampToValueAtTime(0.0001, at + len / mul);
+      o.connect(v).connect(c.destination);
+      o.start(at); o.stop(at + len + 0.05);
+    });
+  };
+  const sounds = {
+    sc: (c, v) => { bell(c, 1568, 0, 0.6, 0.35, v); bell(c, 2093, 0.09, 0.9, 0.35, v); },
+    big: (c, v) => {
+      [1047, 1319, 1568, 2093, 2637].forEach((f, i) => bell(c, f, i * 0.08, 1.2, 0.3, v));
+      bell(c, 2093, 0.5, 1.6, 0.3, v); bell(c, 3136, 0.55, 1.4, 0.15, v);
+    },
+    gift: (c, v) => { bell(c, 1175, 0, 0.7, 0.3, v); bell(c, 1760, 0.12, 0.9, 0.25, v); },
+  };
+  document.querySelectorAll('[data-snd]').forEach(b => b.addEventListener('click', () => {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!actx) actx = new AC();
+    if (actx.state === 'suspended') actx.resume();
+    sounds[b.dataset.snd](actx, $('sndv').value / 100);
+  }));
 
   update();
 </script>

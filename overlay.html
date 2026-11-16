@@ -120,7 +120,8 @@
     box-shadow: var(--shadow);
   }
   /* 1行目にスパチャ、2行目にギフトとメンギフ。横いっぱいを使うので、数字が大きくなっても欠けない */
-  .sc .line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2em 0.4em; white-space: nowrap; min-width: 0; }
+  /* 中身は横の中央にそろえる */
+  .sc .line { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.2em 0.4em; white-space: nowrap; min-width: 0; }
   /* 2行目（ギフト・メンギフ）は少し小さめにして1行に収める。とても大きい数のときだけ折り返す */
   .sc .line + .line { margin-top: 0.25em; font-size: 0.85em; }
   .sc .line .sep { width: 0.1em; align-self: stretch; background: var(--bg2); margin: 0 0.15em; }
@@ -131,7 +132,7 @@
   .sc .goalline .left { margin-left: auto; }
   .sc .track { margin-top: 0.2em; height: 0.5em; border-radius: 999px; background: var(--bg2); overflow: hidden; }
   .sc .fill { height: 100%; width: 0; border-radius: 999px; background: var(--fg2); transition: width .8s ease-out; }
-  .sc .note { margin-top: 0.3em; font-size: 0.55em; font-weight: 700; opacity: .9; }
+  .sc .note { text-align: center; margin-top: 0.3em; font-size: 0.55em; font-weight: 700; opacity: .9; }
   .sc.done .fill {
     background: linear-gradient(90deg, var(--fg2), #ffd54f, var(--fg2)); background-size: 200% 100%;
     animation: shine 1.2s linear infinite;
@@ -433,6 +434,70 @@
     };
   }
 
+  // ===== スパチャの効果音 =====
+  // snd=1 で鳴らす, sndv=音量(0〜100), sndg=1 でギフト・メンギフ・メンバー加入でも鳴らす
+  // 音のファイルは使わず、ブラウザの中で音を作る。1万円以上のスパチャは豪華な音にする。
+  // 設定ページのプレビューでは鳴らさない（デモで数秒おきに鳴ってうるさいので。設定ページに「試しに鳴らす」がある）
+  function makeChime() {
+    if (p.get('snd') !== '1' || isPreview) return null;
+    const vol = Math.min(100, Math.max(0, parseInt(p.get('sndv'), 10) || 70)) / 100;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC || !vol) return null;
+    let ctx = null;
+    const getCtx = () => {
+      if (!ctx) ctx = new AC();
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      return ctx;
+    };
+    // 画面に触れたときにも鳴らせる状態にしておく（ブラウザによっては、触れるまで音が出ない）
+    ['pointerdown', 'touchstart', 'keydown'].forEach(ev => addEventListener(ev, getCtx, { passive: true }));
+    try { getCtx(); } catch (e) {}
+
+    // 鈴のような音を1つ鳴らす（f=高さ, t=鳴らし始め(秒後), len=長さ, g=大きさ）
+    const bell = (c, f, t, len, g) => {
+      const at = c.currentTime + t;
+      [[1, 1], [2.76, 0.25], [5.4, 0.08]].forEach(([mul, amp]) => {
+        const o = c.createOscillator(), v = c.createGain();
+        o.type = 'sine';
+        o.frequency.value = f * mul;
+        v.gain.setValueAtTime(0, at);
+        v.gain.linearRampToValueAtTime(g * amp * vol, at + 0.005);
+        v.gain.exponentialRampToValueAtTime(0.0001, at + len / mul);
+        o.connect(v).connect(c.destination);
+        o.start(at); o.stop(at + len + 0.05);
+      });
+    };
+    const sounds = {
+      // スパチャ：チャリン（2音）
+      sc: c => { bell(c, 1568, 0, 0.6, 0.35); bell(c, 2093, 0.09, 0.9, 0.35); },
+      // 1万円以上：キラキラと上がっていく音
+      big: c => {
+        [1047, 1319, 1568, 2093, 2637].forEach((f, i) => bell(c, f, i * 0.08, 1.2, 0.3));
+        bell(c, 2093, 0.5, 1.6, 0.3); bell(c, 3136, 0.55, 1.4, 0.15);
+      },
+      // ギフト・メンギフ・メンバー加入：やわらかい「ポロン」
+      gift: c => { bell(c, 1175, 0, 0.7, 0.3); bell(c, 1760, 0.12, 0.9, 0.25); },
+    };
+    // 一度にたくさん来たときは、少し間をあけて順番に鳴らす（多すぎる分は鳴らさない）
+    const queue = [];
+    let busy = false;
+    const next = () => {
+      const kind = queue.shift();
+      if (!kind) { busy = false; return; }
+      busy = true;
+      try { sounds[kind](getCtx()); } catch (e) { console.warn('[効果音]', e.message); }
+      setTimeout(next, kind === 'big' ? 2000 : 1200);
+    };
+    return {
+      play(kind) {
+        if (kind === 'gift' && p.get('sndg') !== '1') return;
+        if (queue.length >= 5) return;
+        queue.push(kind);
+        if (!busy) next();
+      },
+    };
+  }
+
   // ===== スパチャ・ギフトのカウンター =====
   // sc=1 で表示, sct=スパチャの目標金額（円。0 なら目標なし）
   // スーパーステッカーもスパチャとして数える。海外のお金は円に直して足す。ギフトはジュエル数を足す。
@@ -447,6 +512,9 @@
     const THANKS_MS = Math.max(1, parseInt(p.get('thxm'), 10) || 10) * 60000;
     if (target > 0) $s('sc-goal').hidden = false;
     const thanks = thanksOn ? makeThanksTicker() : null;
+    const chime = makeChime();
+    // 効果音は、送られてから3分以内のものだけ鳴らす（開いたときに読んだ昔の分では鳴らさない）
+    const ring = (kind, at) => { if (chime && Date.now() - (at || Date.now()) < 180000) chime.play(kind); };
     const fresh = () => donors.filter(d => Date.now() - d.at < THANKS_MS);
     const showThanks = () => { if (thanks) thanks.set(fresh().map(d => d.text)); };
     const cleanName = name => {
@@ -513,23 +581,26 @@
       addSuperChat(id, yen, name, display, at) {
         add(id, () => {
           state.n++; state.yen += yen;
+          ring(yen >= 10000 ? 'big' : 'sc', at);
           addDonor(`💰 ${cleanName(name)}さん ${display || '¥' + Math.round(yen).toLocaleString()} ありがとう！`, at);
         });
       },
       addGift(id, jewels, name, at) {
         add(id, () => {
           state.g++; state.j += jewels;
+          ring('gift', at);
           addDonor(`🎁 ${cleanName(name)}さん ギフト（💎${jewels}）ありがとう！`, at);
         });
       },
       addMemberGift(id, count, name, at) {
         add(id, () => {
           state.mg += count;
+          ring('gift', at);
           addDonor(`👑 ${cleanName(name)}さん メンバーシップ ${count}人分ギフト ありがとう！`, at);
         });
       },
       addNewMember(id, name, at) {
-        add(id, () => { addDonor(`👑 ${cleanName(name)}さん メンバー加入ありがとう！`, at); });
+        add(id, () => { ring('gift', at); addDonor(`👑 ${cleanName(name)}さん メンバー加入ありがとう！`, at); });
       },
       show: render,
       note(msg) {
